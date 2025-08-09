@@ -1,24 +1,29 @@
 import React from 'react';
+import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
+import { ThemeProvider, useTheme } from './contexts/ThemeContext';
 
-// Ultra-minimal test without any dependencies
-function App() {
+// Simple working component with ThemeContext
+const SimpleHome = () => {
+  const { theme } = useTheme();
+  
   return (
     <div style={{ 
       padding: '40px', 
       fontFamily: 'Arial, sans-serif',
-      backgroundColor: '#f0f8ff',
+      backgroundColor: theme === 'dark' ? '#1a1a1a' : '#f0f8ff',
+      color: theme === 'dark' ? 'white' : 'black',
       minHeight: '100vh'
     }}>
       <div style={{
         maxWidth: '600px',
         margin: '0 auto',
-        backgroundColor: 'white',
+        backgroundColor: theme === 'dark' ? '#2d2d2d' : 'white',
         padding: '30px',
         borderRadius: '10px',
         boxShadow: '0 4px 6px rgba(0,0,0,0.1)'
       }}>
-        <h1 style={{ color: '#2c3e50', textAlign: 'center', marginBottom: '20px' }}>
-          🎵 LyricFinder - Testing Phase
+        <h1 style={{ textAlign: 'center', marginBottom: '20px' }}>
+          🎵 LyricFinder - Phase 2 Testing
         </h1>
         
         <div style={{ 
@@ -28,11 +33,11 @@ function App() {
           borderRadius: '5px',
           marginBottom: '20px'
         }}>
-          <h3 style={{ margin: '0 0 10px 0', color: '#155724' }}>✅ Success Status:</h3>
+          <h3 style={{ margin: '0 0 10px 0', color: '#155724' }}>✅ Now Working:</h3>
           <ul style={{ margin: 0, paddingLeft: '20px', color: '#155724' }}>
-            <li>React is loading correctly</li>
-            <li>Vercel deployment is working</li>
-            <li>No complex components causing crashes</li>
+            <li>React Router ✅</li>
+            <li>ThemeContext (Fixed localStorage issue) ✅</li>
+            <li>Current theme: <strong>{theme}</strong></li>
           </ul>
         </div>
 
@@ -52,21 +57,40 @@ function App() {
           </p>
         </div>
 
-        <div style={{ 
-          backgroundColor: '#cce7ff', 
-          border: '1px solid #b3d9ff',
-          padding: '15px', 
-          borderRadius: '5px'
-        }}>
-          <h3 style={{ margin: '0 0 10px 0', color: '#004085' }}>🚀 Next Steps:</h3>
-          <ol style={{ margin: 0, paddingLeft: '20px', color: '#004085' }}>
-            <li>Verify this simple page loads</li>
-            <li>Gradually add back components</li>
-            <li>Test full functionality</li>
-          </ol>
-        </div>
+        <button 
+          onClick={() => window.location.reload()} 
+          style={{
+            padding: '10px 20px',
+            backgroundColor: '#007bff',
+            color: 'white',
+            border: 'none',
+            borderRadius: '5px',
+            cursor: 'pointer',
+            fontSize: '16px'
+          }}
+        >
+          🔄 Test Refresh
+        </button>
       </div>
     </div>
+  );
+};
+
+const AppContent = () => {
+  return (
+    <Router>
+      <Routes>
+        <Route path="/" element={<SimpleHome />} />
+      </Routes>
+    </Router>
+  );
+};
+
+function App() {
+  return (
+    <ThemeProvider>
+      <AppContent />
+    </ThemeProvider>
   );
 }
 
