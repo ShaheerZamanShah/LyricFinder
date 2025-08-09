@@ -11,15 +11,11 @@ export const useTheme = () => {
 };
 
 export const ThemeProvider = ({ children }) => {
-  const [theme, setTheme] = useState('light'); // Default to 'light' initially
-
-  useEffect(() => {
-    // Check localStorage after component mounts (client-side only)
+  const [theme, setTheme] = useState(() => {
+    // Check localStorage for saved preference, default to 'light'
     const saved = localStorage.getItem('theme');
-    if (saved && saved !== theme) {
-      setTheme(saved);
-    }
-  }, []);
+    return saved || 'light';
+  });
 
   useEffect(() => {
     // Save to localStorage whenever theme changes
