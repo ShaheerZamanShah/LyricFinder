@@ -12,6 +12,7 @@ export const useTheme = () => {
 
 export const ThemeProvider = ({ children }) => {
   const [theme, setTheme] = useState('light'); // Start with default
+  const [isLoaded, setIsLoaded] = useState(false);
 
   useEffect(() => {
     // Only access localStorage after component mounts (client-side)
@@ -19,11 +20,14 @@ export const ThemeProvider = ({ children }) => {
     if (savedTheme && savedTheme !== theme) {
       setTheme(savedTheme);
     }
+    setIsLoaded(true);
   }, []); // Run only once on mount
 
   useEffect(() => {
-    // Save to localStorage whenever theme changes
-    localStorage.setItem('theme', theme);
+    // Save to localStorage whenever theme changes (but only after initial load)
+    if (isLoaded) {
+      localStorage.setItem('theme', theme);
+    }
     
     // Update document class for global styling
     document.documentElement.classList.remove('light', 'medium', 'dark');
