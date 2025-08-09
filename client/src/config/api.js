@@ -4,7 +4,7 @@ const API_CONFIG = {
     BASE_URL: 'http://localhost:5000',
   },
   production: {
-    BASE_URL: process.env.REACT_APP_API_URL || 'https://your-render-app-name.onrender.com',
+    BASE_URL: process.env.REACT_APP_API_URL || 'https://lyricfinder-backend-placeholder.com',
   }
 };
 
