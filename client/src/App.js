@@ -1,54 +1,51 @@
 import React from 'react';
-import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
-// import Header from './components/Header';
-// import Home from './pages/Home';
-import SpotifyCallback from './components/SpotifyCallback';
-// import DarkVeil from './components/DarkVeil';
-import { ThemeProvider, useTheme } from './contexts/ThemeContext';
 
-// Minimal test component
-const MinimalHome = () => {
-  const { theme } = useTheme();
-  
+// Ultra minimal test - no imports, no context, no routing
+const App = () => {
   return (
-    <div style={{ padding: '20px', background: 'white', minHeight: '100vh' }}>
-      <h1 style={{ color: 'black' }}>🎵 LyricFinder Debug Mode</h1>
-      <div style={{ marginTop: '20px', padding: '15px', background: '#f0f0f0', borderRadius: '8px' }}>
-        <h3>Environment Check:</h3>
-        <p><strong>Theme:</strong> {theme}</p>
-        <p><strong>API URL:</strong> {process.env.REACT_APP_API_URL || 'Not set'}</p>
-        <p><strong>Environment:</strong> {process.env.NODE_ENV}</p>
+    <div style={{ 
+      padding: '40px', 
+      fontFamily: 'Arial, sans-serif',
+      background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+      minHeight: '100vh',
+      color: 'white'
+    }}>
+      <h1 style={{ textAlign: 'center', marginBottom: '30px' }}>
+        🎵 LyricFinder - Ultra Minimal Test
+      </h1>
+      
+      <div style={{ 
+        backgroundColor: 'rgba(255,255,255,0.1)', 
+        padding: '20px', 
+        borderRadius: '10px',
+        marginBottom: '20px'
+      }}>
+        <h3>✅ Production Test Status:</h3>
+        <ul style={{ marginLeft: '20px' }}>
+          <li>✅ React rendering</li>
+          <li>✅ No SSR conflicts</li>
+          <li>✅ No WebGL dependencies</li>
+          <li>✅ No localStorage in initializers</li>
+          <li>✅ Pure CSS styling</li>
+        </ul>
       </div>
-      <div style={{ marginTop: '20px', padding: '15px', background: '#e8f5e8', borderRadius: '8px' }}>
-        <h3>Status:</h3>
-        <p>✅ React is working</p>
-        <p>✅ ThemeContext is working</p>
-        <p>✅ Router is working</p>
-        <p>🔄 Testing components individually...</p>
+
+      <div style={{ 
+        backgroundColor: 'rgba(255,255,255,0.1)', 
+        padding: '20px', 
+        borderRadius: '10px' 
+      }}>
+        <h3>🎯 Next Steps:</h3>
+        <p>This minimal version should work in production. Once confirmed, we'll progressively add:</p>
+        <ol style={{ marginLeft: '20px' }}>
+          <li>ThemeContext (fixed localStorage)</li>
+          <li>React Router</li>
+          <li>Header component</li>
+          <li>Home component with search</li>
+        </ol>
       </div>
     </div>
   );
 };
-
-const AppContent = () => {
-  return (
-    <Router>
-      <div style={{ minHeight: '100vh', background: 'white' }}>
-        <Routes>
-          <Route path="/" element={<MinimalHome />} />
-          <Route path="/callback" element={<SpotifyCallback />} />
-        </Routes>
-      </div>
-    </Router>
-  );
-};
-
-function App() {
-  return (
-    <ThemeProvider>
-      <AppContent />
-    </ThemeProvider>
-  );
-}
 
 export default App;
