@@ -6,31 +6,25 @@ import SpotifyCallback from './components/SpotifyCallback';
 // import DarkVeil from './components/DarkVeil';
 import { ThemeProvider, useTheme } from './contexts/ThemeContext';
 
-// Simple safe component to test step by step
-const SafeHome = () => {
+// Minimal test component
+const MinimalHome = () => {
   const { theme } = useTheme();
   
   return (
-    <div className="min-h-screen p-8 bg-white">
-      <div className="max-w-4xl mx-auto text-center">
-        <h1 className="text-4xl font-bold mb-4 text-black">
-          🎵 LyricFinder is Loading...
-        </h1>
-        <p className="text-lg mb-8 text-gray-700">
-          Testing component by component to find the issue.
-        </p>
-        <div className="bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded mb-4">
-          <strong>✅ React is working!</strong>
-          <p className="mt-2">Current theme: {theme}</p>
-          <p>Backend URL: {process.env.REACT_APP_API_URL || 'Not set yet'}</p>
-        </div>
-        
-        <div className="text-sm text-gray-600 mt-8">
-          <h3 className="font-semibold mb-2">Deployment Status:</h3>
-          <p>✅ Frontend: Deployed on Vercel</p>
-          <p>✅ Backend: Deployed on Railway</p>
-          <p>🔄 Testing: Components step by step</p>
-        </div>
+    <div style={{ padding: '20px', background: 'white', minHeight: '100vh' }}>
+      <h1 style={{ color: 'black' }}>🎵 LyricFinder Debug Mode</h1>
+      <div style={{ marginTop: '20px', padding: '15px', background: '#f0f0f0', borderRadius: '8px' }}>
+        <h3>Environment Check:</h3>
+        <p><strong>Theme:</strong> {theme}</p>
+        <p><strong>API URL:</strong> {process.env.REACT_APP_API_URL || 'Not set'}</p>
+        <p><strong>Environment:</strong> {process.env.NODE_ENV}</p>
+      </div>
+      <div style={{ marginTop: '20px', padding: '15px', background: '#e8f5e8', borderRadius: '8px' }}>
+        <h3>Status:</h3>
+        <p>✅ React is working</p>
+        <p>✅ ThemeContext is working</p>
+        <p>✅ Router is working</p>
+        <p>🔄 Testing components individually...</p>
       </div>
     </div>
   );
@@ -82,20 +76,11 @@ const AppContent = () => {
   
   return (
     <Router>
-      <div className="min-h-screen flex flex-col relative transition-colors duration-300">
-        {/* Content Layer */}
-        <div className="relative z-10 flex flex-col min-h-screen">
-          <Routes>
-            <Route path="/" element={
-              <>
-                <main className="flex-1 p-5 max-w-6xl mx-auto w-full">
-                  <SafeHome />
-                </main>
-              </>
-            } />
-            <Route path="/callback" element={<SpotifyCallback />} />
-          </Routes>
-        </div>
+      <div style={{ minHeight: '100vh', background: 'white' }}>
+        <Routes>
+          <Route path="/" element={<MinimalHome />} />
+          <Route path="/callback" element={<SpotifyCallback />} />
+        </Routes>
       </div>
     </Router>
   );
