@@ -1,4 +1,4 @@
-// API configuration for different environments
+// API configuration for different environments - Updated for deployment
 const API_CONFIG = {
   development: {
     BASE_URL: 'http://localhost:5000',
