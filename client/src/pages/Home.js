@@ -2,7 +2,6 @@ import React, { useState, useEffect, useRef } from 'react';
 import SearchForm from '../components/SearchForm';
 import ArtistSection from '../components/ArtistSection';
 import { Music, Play, Pause, ExternalLink } from 'lucide-react';
-import ArtistList from '../components/ArtistList';
 import { useTheme } from '../contexts/ThemeContext';
 import useSpotify from '../hooks/useSpotify';
 import { API_ENDPOINTS } from '../config/api';
@@ -347,7 +346,7 @@ const Home = ({ searchResult: externalResult, onSearchResults, onCollapseChange,
       setTimeout(async () => {
         try {
           const recommendations = await getSpotifyRecommendations(result.song.spotify_id, result.song.artist);
-          result.song.recommendations = (recommendations || []).slice(0, 10);
+          result.song.recommendations = recommendations;
           setSearchResult({ ...result });
         } catch (error) {
           result.song.recommendations = getFallbackRecommendations();
@@ -535,9 +534,9 @@ const Home = ({ searchResult: externalResult, onSearchResults, onCollapseChange,
       { artist: "BTS", title: "Dynamite", image: "https://i.scdn.co/image/ab67616d0000b273bb54dde68cd23e2a268ae0f5" }
     ];
 
-  // Shuffle and take 10 random songs each time to fill 5-per-row nicely
+    // Shuffle and take 6 random songs each time
     const shuffled = allFallbackSongs.sort(() => 0.5 - Math.random());
-  const selected = shuffled.slice(0, 10);
+    const selected = shuffled.slice(0, 6);
     
     return selected.map((song, index) => ({
       id: `fallback_${Date.now()}_${index}`, // Add timestamp for uniqueness
@@ -670,7 +669,7 @@ const Home = ({ searchResult: externalResult, onSearchResults, onCollapseChange,
           setTimeout(async () => {
             try {
               const recommendations = await getSpotifyRecommendations(result.song.spotify_id, result.song.artist);
-              result.song.recommendations = (recommendations || []).slice(0, 10);
+              result.song.recommendations = recommendations;
               setSearchResult({...result});
             } catch (error) {
               result.song.recommendations = getFallbackRecommendations();
@@ -874,16 +873,29 @@ const Home = ({ searchResult: externalResult, onSearchResults, onCollapseChange,
     }
   `;
 
-
-  // All artists (primary + features/collaborators) for display
-  const allArtists = React.useMemo(() => {
+  // Compute collaborator names for badges and the "with …" line, based on current searchResult
+  const collaboratorNames = React.useMemo(() => {
     const song = searchResult?.song;
     if (!song) return [];
-    if (Array.isArray(song.artists) && song.artists.length > 0) {
-      return song.artists;
+    // Prefer explicitly set featured_artists
+    if (Array.isArray(song.featured_artists) && song.featured_artists.length > 0) {
+      return song.featured_artists;
     }
-    // fallback: just primary
-    if (song.artist) return [{ name: song.artist }];
+    // Otherwise derive from Spotify artists array (exclude primary artist)
+    if (Array.isArray(song.artists) && song.artist) {
+      const primary = (song.artist || '').toLowerCase();
+      const others = song.artists
+        .map(a => a?.name)
+        .filter(n => n && n.toLowerCase() !== primary)
+        .map(n => n.trim());
+      // De-duplicate while preserving order
+      const seen = new Set();
+      return others.filter(n => (seen.has(n.toLowerCase()) ? false : (seen.add(n.toLowerCase()), true)));
+    }
+    // Fallback to parsing the title
+    if (song.title) {
+      return parseFeaturedArtists(song.title);
+    }
     return [];
   }, [searchResult]);
 
@@ -920,11 +932,17 @@ const Home = ({ searchResult: externalResult, onSearchResults, onCollapseChange,
                 : 'bg-black/40'
             }`}>
               {/* Album Art & Song Info */}
-              {/* Vinyl/Artist Row */}
-              <div className="flex flex-row items-start gap-8 mb-6">
-                {/* Vinyl/Album Cover - shifted left */}
-                <div className="relative group cursor-pointer flex-shrink-0" style={{ marginLeft: '-1.5rem' }} onClick={handleAlbumCoverClick}>
-                  <div className={`vinyl-record w-44 h-44 ${isPlaying ? 'vinyl-spinning' : ''}`}> 
+              <div className="flex flex-col items-center gap-4">
+                <div 
+                  className="relative group cursor-pointer"
+                  onClick={(e) => {
+                    console.log('Container clicked!', e);
+                    handleAlbumCoverClick();
+                  }}
+                >
+                  {/* Vinyl Record Base */}
+                  <div className={`vinyl-record w-44 h-44 ${isPlaying ? 'vinyl-spinning' : ''}`}>
+                    {/* Album Cover */}
                     <img 
                       src={searchResult.song.image || 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMzAwIiBoZWlnaHQ9IjMwMCIgdmlld0JveD0iMCAwIDMwMCAzMDAiIGZpbGw9Im5vbmUiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+CjxyZWN0IHdpZHRoPSIzMDAiIGhlaWdodD0iMzAwIiBmaWxsPSIjMzMzIi8+Cjx0ZXh0IHg9IjE1MCIgeT0iMTcwIiB0ZXh0LWFuY2hvcj0ibWlkZGxlIiBmaWxsPSIjNjY2IiBmb250LXNpemU9IjQ4IiBmb250LWZhbWlseT0iQXJpYWwiPuKZqjwvdGV4dD4KPC9zdmc+'} 
                       alt="album art" 
@@ -947,52 +965,72 @@ const Home = ({ searchResult: externalResult, onSearchResults, onCollapseChange,
                       }}
                     />
                   </div>
-                  {/* Play/Pause Overlay */}
-                  {searchResult.song.preview_url && (
-                    <div className={`absolute inset-0 flex items-center justify-center rounded-full transition-opacity duration-300 pointer-events-none ${
-                      isPlaying ? 'opacity-0' : 'opacity-0 group-hover:opacity-100'
-                    }`}>
-                      <div className="bg-black/60 rounded-full p-4 backdrop-blur-sm">
-                        {isPlaying ? (
-                          <Pause className="w-8 h-8 text-white drop-shadow-lg" />
-                        ) : (
-                          <Play className="w-8 h-8 text-white drop-shadow-lg ml-1" />
+                    
+                    {/* Play/Pause Overlay */}
+                    {searchResult.song.preview_url && (
+                      <div className={`absolute inset-0 flex items-center justify-center rounded-full transition-opacity duration-300 pointer-events-none ${
+                        isPlaying ? 'opacity-0' : 'opacity-0 group-hover:opacity-100'
+                      }`}>
+                        <div className="bg-black/60 rounded-full p-4 backdrop-blur-sm">
+                          {isPlaying ? (
+                            <Pause className="w-8 h-8 text-white drop-shadow-lg" />
+                          ) : (
+                            <Play className="w-8 h-8 text-white drop-shadow-lg ml-1" />
+                          )}
+                        </div>
+                      </div>
+                    )}
+                    
+                    {/* Vinyl Grooves Effect */}
+                    <div className="absolute inset-2 rounded-full pointer-events-none" style={{
+                      background: `radial-gradient(
+                        circle at center, 
+                        transparent 15%, 
+                        rgba(255,255,255,0.02) 16%, 
+                        transparent 17%, 
+                        rgba(255,255,255,0.02) 18%, 
+                        transparent 19%, 
+                        rgba(255,255,255,0.02) 20%, 
+                        transparent 21%, 
+                        rgba(255,255,255,0.02) 22%, 
+                        transparent 23%, 
+                        rgba(255,255,255,0.02) 24%, 
+                        transparent 25%
+                      )`
+                    }}>
+                    </div>
+                  </div>
+                
+                <div className="flex flex-col items-center text-center">
+                  <div className="flex items-center gap-2 flex-wrap justify-center">
+                    <span className={`text-lg font-semibold ${
+                      theme === 'light' ? 'text-gray-900' : 'text-indigo-200'
+                    }`}>{searchResult.song.title}</span>
+                    {collaboratorNames.length > 0 && (
+                      <div className="flex items-center gap-1">
+                        {collaboratorNames.slice(0, 3).map((name, idx) => (
+                          <span key={idx} className="text-[10px] px-2 py-0.5 rounded-full bg-indigo-600/80 text-white shadow-sm">{name}</span>
+                        ))}
+                        {collaboratorNames.length > 3 && (
+                          <span className="text-[10px] px-2 py-0.5 rounded-full bg-indigo-600/50 text-white">+{collaboratorNames.length - 3}</span>
                         )}
                       </div>
+                    )}
+                  </div>
+                  <span className={`text-md font-medium ${
+                    theme === 'light' ? 'text-gray-700' : 'text-indigo-400'
+                  }`}>{searchResult.song.artist}</span>
+                  {collaboratorNames.length > 0 && (
+                    <div className={`text-xs mt-0.5 ${theme === 'light' ? 'text-gray-600' : 'text-gray-300'}`}>
+                      with {collaboratorNames.join(', ')}
                     </div>
                   )}
-                  {/* Vinyl Grooves Effect */}
-                  <div className="absolute inset-2 rounded-full pointer-events-none" style={{
-                    background: `radial-gradient(
-                      circle at center, 
-                      transparent 15%, 
-                      rgba(255,255,255,0.02) 16%, 
-                      transparent 17%, 
-                      rgba(255,255,255,0.02) 18%, 
-                      transparent 19%, 
-                      rgba(255,255,255,0.02) 20%, 
-                      transparent 21%, 
-                      rgba(255,255,255,0.02) 22%, 
-                      transparent 23%, 
-                      rgba(255,255,255,0.02) 24%, 
-                      transparent 25%
-                    )`
-                  }}>
-                  </div>
-                </div>
-                {/* Artist List - always visible, right of vinyl */}
-                <div className="flex flex-col items-start justify-center flex-1 min-w-[120px]">
-                  <span className={`text-lg font-semibold mb-2 ${
-                    theme === 'light' ? 'text-gray-900' : 'text-indigo-200'
-                  }`}>Artists</span>
-                  <ArtistList artists={allArtists} primary={searchResult.song.artist} />
                   {searchResult.song.album && (
-                    <div className={`text-xs mt-2 ${
+                    <div className={`text-xs mt-1 ${
                       theme === 'light' ? 'text-gray-600' : 'text-gray-400'
                     }`}>Album: {searchResult.song.album}</div>
                   )}
                 </div>
-              </div>
 
                 {/* Action Buttons */}
                 <div className="flex flex-wrap gap-3 mt-4 justify-center">
@@ -1109,29 +1147,29 @@ const Home = ({ searchResult: externalResult, onSearchResults, onCollapseChange,
                     Other Songs
                   </div>
                   
-      {isLoadingRecommendations ? (
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+                  {isLoadingRecommendations ? (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                       {[...Array(6)].map((_, index) => (
                         <div 
                           key={`loading_${index}`}
-          className={`rounded-lg p-3 flex flex-col items-center transition-all duration-300 shadow-sm animate-pulse ${
+                          className={`rounded-xl p-4 flex flex-col items-center transition-all duration-300 shadow-md animate-pulse ${
                             theme === 'light' 
                               ? 'bg-gray-200/70' 
                               : 'bg-gray-900/70'
                           }`}
                         >
-          <div className="w-14 h-14 rounded mb-1.5 bg-gray-400/50"></div>
-          <div className="h-3.5 w-24 bg-gray-400/50 rounded mb-1"></div>
-          <div className="h-3 w-20 bg-gray-400/50 rounded"></div>
+                          <div className="w-16 h-16 rounded mb-2 bg-gray-400/50"></div>
+                          <div className="h-4 w-20 bg-gray-400/50 rounded mb-1"></div>
+                          <div className="h-3 w-16 bg-gray-400/50 rounded"></div>
                         </div>
                       ))}
                     </div>
                   ) : (
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                       {searchResult.song.recommendations.map((rec, index) => (
                         <div 
                           key={rec.id || index} 
-          className={`rounded-lg p-3 flex flex-col items-center transition-all duration-300 shadow-md hover:scale-[1.03] cursor-pointer relative ${
+                          className={`rounded-xl p-4 flex flex-col items-center transition-all duration-300 shadow-md hover:scale-105 cursor-pointer relative ${
                             coverColor ? '' : (
                               theme === 'light' 
                                 ? 'bg-gray-200/70 hover:bg-gray-300/70' 
@@ -1154,18 +1192,18 @@ const Home = ({ searchResult: externalResult, onSearchResults, onCollapseChange,
                           <img 
                             src={rec.thumbnail || rec.image || FALLBACK_COVER} 
                             alt="cover" 
-                            className="w-14 h-14 rounded mb-1.5 object-cover border border-indigo-300/70"
+                            className="w-16 h-16 rounded mb-2 object-cover border-2 border-indigo-300"
                             loading="lazy"
                             decoding="async"
                             referrerPolicy="no-referrer"
                             onError={(e) => { e.currentTarget.src = FALLBACK_COVER; }}
                           />
-                          <div className={`text-xs font-semibold text-center line-clamp-2 ${
+                          <div className={`text-sm font-bold text-center ${
                             theme === 'light' ? 'text-gray-900' : 'text-gray-100'
                           }`}>
                             {rec.title}
                           </div>
-                          <div className={`text-[10px] text-center ${
+                          <div className={`text-xs text-center ${
                             theme === 'light' ? 'text-gray-600' : 'text-gray-400'
                           }`}>
                             {rec.artist}
@@ -1178,7 +1216,16 @@ const Home = ({ searchResult: externalResult, onSearchResults, onCollapseChange,
               ) : null}
             </div>
 
-            )}</div>
+            {/* Right Side: Artist Information */}
+            {searchResult && searchResult.song && searchResult.song.artist && (
+              <div className="w-full -mt-0 lg:-mt-10">
+                <ArtistSection artistName={searchResult.song.artist} coverColor={coverColor} featuredArtists={searchResult.song.featured_artists || []} />
+              </div>
+            )}
+          </div>
+        )}
+        
+        </div>
       </div>
 
       {/* Lyrics Modal */}
