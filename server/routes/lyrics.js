@@ -285,3 +285,70 @@ router.get('/popular', async (req, res) => {
 });
 
 module.exports = router;
+ 
+// GET /api/lyrics/details - Fetch song details/description from Genius
+router.get('/details', async (req, res) => {
+  try {
+    const { title, artist } = req.query;
+    if (!title) {
+      return res.status(400).json({ message: 'title is required' });
+    }
+
+    if (!GENIUS_ACCESS_TOKEN) {
+      return res.status(501).json({ message: 'Genius API key not configured', details: null });
+    }
+
+    const q = artist ? `${title} ${artist}` : title;
+    // Search for the song to get the song ID
+    const searchResponse = await axios.get(`${GENIUS_API_BASE_URL}/search`, {
+      headers: { Authorization: `Bearer ${GENIUS_ACCESS_TOKEN}` },
+      params: { q },
+      timeout: 8000,
+    });
+
+    const hits = searchResponse.data?.response?.hits || [];
+    if (!hits.length) {
+      return res.json({ details: null });
+    }
+
+    // Prefer an exact-ish match if possible
+    const lower = (s) => (s || '').toLowerCase();
+    const preferred = hits.find(h => lower(h.result?.title).includes(lower(title)) && (!artist || lower(h.result?.primary_artist?.name).includes(lower(artist)))) || hits[0];
+    const songId = preferred.result?.id;
+    if (!songId) {
+      return res.json({ details: null });
+    }
+
+    // Fetch song details
+    const songResp = await axios.get(`${GENIUS_API_BASE_URL}/songs/${songId}`, {
+      headers: { Authorization: `Bearer ${GENIUS_ACCESS_TOKEN}` },
+      params: { text_format: 'plain' },
+      timeout: 8000,
+    });
+
+    const s = songResp.data?.response?.song;
+    if (!s) {
+      return res.json({ details: null });
+    }
+
+    // Build a concise details object
+    const details = {
+      id: s.id,
+      title: s.title,
+      artist: s.primary_artist?.name,
+      album: s.album ? { id: s.album.id, name: s.album.name, url: s.album.url } : undefined,
+      release_date: s.release_date_for_display || s.release_date,
+      pageviews: s.stats?.pageviews,
+      url: s.url,
+      image: s.song_art_image_thumbnail_url || s.header_image_thumbnail_url || s.song_art_image_url,
+      description: s.description?.plain || s.description_plain || null,
+      description_preview: preferred.result?.description_preview,
+    };
+
+    return res.json({ details });
+  } catch (err) {
+    console.error('Genius details error:', err.message);
+    // Non-fatal for UI: return null details
+    return res.json({ details: null, error: 'Failed to fetch details' });
+  }
+});

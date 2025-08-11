@@ -1,11 +1,10 @@
-import React, { useState, useEffect, useRef } from 'react';
+﻿import React, { useState, useEffect, useRef } from 'react';
 import SearchForm from '../components/SearchForm';
 import ArtistSection from '../components/ArtistSection';
 import { Music, Play, Pause, ExternalLink } from 'lucide-react';
 import { useTheme } from '../contexts/ThemeContext';
 import useSpotify from '../hooks/useSpotify';
 import { API_ENDPOINTS } from '../config/api';
-import SongDetails from '../components/SongDetails';
 
 const Home = ({ searchResult: externalResult, onSearchResults, onCollapseChange, isSearchCollapsed, onCoverColorChange }) => {
   const [searchResult, setSearchResult] = useState(externalResult || null);
@@ -399,7 +398,7 @@ const Home = ({ searchResult: externalResult, onSearchResults, onCollapseChange,
       
       const handleError = (e) => {
         console.error('Audio error:', e, audio.error);
-        alert(`🎵 Audio playback failed\n\nError: ${audio.error?.message || 'Unknown error'}\n\nTry listening on Spotify or YouTube instead!`);
+        alert(`≡ƒÄ╡ Audio playback failed\n\nError: ${audio.error?.message || 'Unknown error'}\n\nTry listening on Spotify or YouTube instead!`);
         setIsPlaying(false);
         setAudioRef(null);
         audio.removeEventListener('ended', handleEnded);
@@ -422,14 +421,14 @@ const Home = ({ searchResult: externalResult, onSearchResults, onCollapseChange,
         }
       } catch (playError) {
         console.error('Play error:', playError);
-        alert(`🎵 Playback failed: ${playError.message}\n\nThis might be due to browser autoplay restrictions. Try clicking the album cover again!`);
+        alert(`≡ƒÄ╡ Playback failed: ${playError.message}\n\nThis might be due to browser autoplay restrictions. Try clicking the album cover again!`);
         setIsPlaying(false);
         setAudioRef(null);
         audio.removeEventListener('ended', handleEnded);
         audio.removeEventListener('error', handleError);
       }
     } catch (error) {
-      alert(`🎵 Error creating audio: ${error.message}`);
+      alert(`≡ƒÄ╡ Error creating audio: ${error.message}`);
       setIsPlaying(false);
       setAudioRef(null);
     }
@@ -487,7 +486,7 @@ const Home = ({ searchResult: externalResult, onSearchResults, onCollapseChange,
       
       // If we still don't have a preview URL, show the alert
       console.log('No preview URL available - showing alert');
-      alert(`🎵 Audio preview not available for "${searchResult?.song?.title}"\n\nThis is common for popular songs due to licensing restrictions. You can listen to the full song on Spotify or YouTube using the buttons below!`);
+      alert(`≡ƒÄ╡ Audio preview not available for "${searchResult?.song?.title}"\n\nThis is common for popular songs due to licensing restrictions. You can listen to the full song on Spotify or YouTube using the buttons below!`);
       return;
     }
 
@@ -874,7 +873,7 @@ const Home = ({ searchResult: externalResult, onSearchResults, onCollapseChange,
     }
   `;
 
-  // Compute collaborator names for badges and the "with …" line, based on current searchResult
+  // Compute collaborator names for badges and the "with ΓÇª" line, based on current searchResult
   const collaboratorNames = React.useMemo(() => {
     const song = searchResult?.song;
     if (!song) return [];
@@ -1137,11 +1136,6 @@ const Home = ({ searchResult: externalResult, onSearchResults, onCollapseChange,
                     {searchResult.song.lyrics}
                   </pre>
                 </div>
-              )}
-
-              {/* Genius Song Details (below lyrics, above recommendations) */}
-              {searchResult?.song?.title && (
-                <SongDetails title={searchResult.song.title} artist={searchResult.song.artist} theme={theme} />
               )}
 
               {/* Recommendations Section */}

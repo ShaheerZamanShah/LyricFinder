@@ -16,6 +16,7 @@ export const API_ENDPOINTS = {
   SPOTIFY_PREVIEW: `${API_BASE_URL}/api/spotify/preview`,
   SPOTIFY_SEARCH: `${API_BASE_URL}/api/spotify/search`,
   POPULAR_LYRICS: `${API_BASE_URL}/api/lyrics/popular`,
+  GENIUS_DETAILS: `${API_BASE_URL}/api/lyrics/details`,
   SONGS: `${API_BASE_URL}/api/songs`,
   LASTFM_ARTIST: `${API_BASE_URL}/api/lastfm/artist`,
   SPOTIFY_AUTH: `${API_BASE_URL}/api/spotify/auth`,
