@@ -97,49 +97,58 @@ const Home = ({ searchResult: externalResult, onSearchResults, onCollapseChange,
 
   // Fast, robust lyrics cleaner. Removes pre-lyrics clutter and normalizes spacing/sections.
   const normalizeLyrics = (raw) => {
-    if (!raw || typeof raw !== 'string') return raw;
+    if (!raw || typeof raw !== 'string') return '';
     let text = raw.replace(/\r\n?/g, '\n');
 
-    // Trim obvious site clutter at the start
+    // Remove common pre/post clutter
+    // - Leading/trailing whitespace
+    // - "Lyrics" headers, timestamps, or trailing "Embed" markers
     text = text
-      .replace(/^\s*\d+\s*Contributors.*\n?/i, '')
-      .replace(/^\s*(Contributors|Translations|You might also like|Embed|About|More on Genius).*[\r\n]+/gi, '')
-      .replace(/^\s*.*?\bLyrics\b.*\n/i, '') // e.g., "505 Lyrics"
-      .replace(/^\s*[A-Za-zÀ-ÿ]+\s*:\s*.*\n/gi, '') // language lines like "Italiano: ..."
-      .replace(/^\s*Read.*\n/gi, '');
-
-    // If there's any bracketed section like [Intro]/[Verse]/etc, hard cut everything before it
-    const firstBracket = text.search(/\[[^\]]+\]/);
-    if (firstBracket >= 0) {
-      text = text.slice(firstBracket);
-    }
-
-    // Ensure section headers are isolated and spaced
-    text = text.replace(/\s*\[([^\]]+)\]\s*/g, '\n[$1]\n');
-
-    // Heuristic 1: Insert newline after sentence-ending punctuation before a capital/section
-    text = text.replace(/([a-z0-9)\]])([.!?])\s*(?=[A-Z[])/g, '$1$2\n');
-
-    // Heuristic 2: Fix run-on lines like: callI've -> call\nI've
-    text = text.replace(/([a-z])([A-Z][a-z'’]+)/g, '$1\n$2');
-
-    // Heuristic 3: Also split before common pronoun starts if accidentally concatenated
-    text = text.replace(/([a-z])((?:I['’](?:m|ve|d|ll)))/g, '$1\n$2');
-
-    // Collapse 3+ blank lines to a single blank line
-    text = text.replace(/\n{3,}/g, '\n\n');
-
-    // Trim trailing footer noise
-    text = text.replace(/(?:\n)*(You might also like|Embed|More on Genius)[\s\S]*$/i, '');
-
-    // Final tidy: trim spaces per line and overall
-    text = text
-      .split('\n')
-      .map((l) => l.replace(/\s+$/g, ''))
-      .join('\n')
+      .replace(/^\s*lyrics\s*$/gim, '')
+      .replace(/^\s*([0-9]{1,2}:[0-9]{2})\s*$/gim, '')
+      .replace(/\n?\s*\d+embed\s*$/i, '')
+      .replace(/\u200B|\uFEFF/g, '')
       .trim();
 
-    return text;
+    // Ensure section headers like [Chorus] or (Chorus) have spacing around them
+    text = text
+      .replace(/\n{3,}/g, '\n\n')
+      .replace(/\s*\n\s*\[(.+?)\]\s*\n\s*/g, '\n\n[$1]\n')
+      .replace(/\s*\n\s*\((.+?:?)\)\s*\n\s*/g, '\n\n($1)\n');
+
+    // Collapse runs of blank lines to max 2
+    text = text.replace(/\n{3,}/g, '\n\n');
+
+    return text.trim();
+  };
+
+  // Parse featured artists from common title patterns: feat./ft./featuring ...
+  const parseFeaturedArtists = (title = '') => {
+    if (!title || typeof title !== 'string') return [];
+    const patterns = [
+      /\((?:feat\.|featuring|ft\.)\s*([^\)]+)\)/i,
+      /-\s*(?:feat\.|featuring|ft\.)\s*([^\-]+)$/i,
+      /(?:feat\.|featuring|ft\.)\s*([^\(\-\[]+)/i,
+    ];
+    let names = [];
+    for (const re of patterns) {
+      const m = title.match(re);
+      if (m && m[1]) {
+        names = m[1]
+          .split(/,|&|x|\+|\band\b/i)
+          .map(s => s.replace(/[\[\](){}]/g, '').trim())
+          .filter(Boolean);
+        break;
+      }
+    }
+    // De-duplicate and limit to a reasonable amount
+    const seen = new Set();
+    const out = [];
+    for (const n of names) {
+      const key = n.toLowerCase();
+      if (!seen.has(key)) { seen.add(key); out.push(n); }
+    }
+    return out;
   };
 
   useEffect(() => {
@@ -250,6 +259,8 @@ const Home = ({ searchResult: externalResult, onSearchResults, onCollapseChange,
       if (result.song.lyrics) {
         result.song.lyrics = normalizeLyrics(result.song.lyrics);
       }
+  // Parse and attach featured artists (for bios)
+  result.song.featured_artists = parseFeaturedArtists(result.song.title);
       // Set result immediately - no recommendations initially
       setSearchResult(result);
       onSearchResults?.(result);
@@ -548,6 +559,8 @@ const Home = ({ searchResult: externalResult, onSearchResults, onCollapseChange,
           if (result.song.lyrics) {
             result.song.lyrics = normalizeLyrics(result.song.lyrics);
           }
+          // Parse and attach featured artists (for bios)
+          result.song.featured_artists = parseFeaturedArtists(result.song.title);
           // Set the result immediately - no recommendations initially
           setSearchResult(result);
          // Compute dominant color from recommendation cover if available
@@ -1108,7 +1121,7 @@ const Home = ({ searchResult: externalResult, onSearchResults, onCollapseChange,
             {/* Right Side: Artist Information */}
             {searchResult && searchResult.song && searchResult.song.artist && (
               <div className="w-full -mt-0 lg:-mt-10">
-                <ArtistSection artistName={searchResult.song.artist} coverColor={coverColor} />
+                <ArtistSection artistName={searchResult.song.artist} coverColor={coverColor} featuredArtists={searchResult.song.featured_artists || []} />
               </div>
             )}
           </div>

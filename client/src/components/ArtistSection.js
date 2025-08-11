@@ -3,10 +3,11 @@ import { fetchArtistInfo } from '../api/artistInfo';
 import ArtistBio from './ArtistBio';
 import GenreTags from './GenreTags';
 import SimilarArtists from './SimilarArtists';
+import FeaturedArtistBios from './FeaturedArtistBios';
 import { Loader, AlertCircle } from 'lucide-react';
 import { useTheme } from '../contexts/ThemeContext';
 
-export default function ArtistSection({ artistName, genresOnly = false, coverColor = null }) {
+export default function ArtistSection({ artistName, genresOnly = false, coverColor = null, featuredArtists = [] }) {
   const [artistData, setArtistData] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(false);
@@ -111,6 +112,7 @@ export default function ArtistSection({ artistName, genresOnly = false, coverCol
   return (
     <section className="mt-10 space-y-6">
       <ArtistBio name={artistData.name} bio={artistData.bio} image={artistData.image} coverColor={coverColor} />
+      <FeaturedArtistBios names={featuredArtists} coverColor={coverColor} />
       <GenreTags tags={artistData.tags} />
       <SimilarArtists artists={artistData.similar} coverColor={coverColor} />
     </section>
