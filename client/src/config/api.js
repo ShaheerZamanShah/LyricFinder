@@ -22,6 +22,7 @@ export const API_ENDPOINTS = {
   SPOTIFY_AUTH: `${API_BASE_URL}/api/spotify/auth`,
   SPOTIFY_CALLBACK: `${API_BASE_URL}/api/spotify/callback`,
   SPOTIFY_RECOMMENDATIONS: `${API_BASE_URL}/api/spotify/recommendations`,
+  SPOTIFY_AUDIO_FEATURES: `${API_BASE_URL}/api/spotify/audio-features`,
   YOUTUBE_LINK: `${API_BASE_URL}/api/youtube/link`,
 };
 

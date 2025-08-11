@@ -444,6 +444,67 @@ async function getSpotifyPreview(query) {
   }
 }
 
+// Get audio features and popularity for a track
+router.get('/audio-features', async (req, res) => {
+  try {
+    const { track_id } = req.query;
+    if (!track_id) {
+      return res.status(400).json({ error: 'track_id is required' });
+    }
+
+    const clientId = process.env.SPOTIFY_CLIENT_ID;
+    const clientSecret = process.env.SPOTIFY_CLIENT_SECRET;
+    if (!clientId || !clientSecret) {
+      return res.status(501).json({ error: 'Spotify credentials not configured' });
+    }
+
+    // Get access token via client credentials
+    const credentials = Buffer.from(`${clientId}:${clientSecret}`).toString('base64');
+    const tokenResp = await axios.post(
+      'https://accounts.spotify.com/api/token',
+      'grant_type=client_credentials',
+      { headers: { Authorization: `Basic ${credentials}`, 'Content-Type': 'application/x-www-form-urlencoded' } }
+    );
+    const accessToken = tokenResp.data.access_token;
+    const headers = { headers: { Authorization: `Bearer ${accessToken}` } };
+
+    // Fetch audio features
+    const featuresResp = await axios.get(
+      `https://api.spotify.com/v1/audio-features/${encodeURIComponent(track_id)}`,
+      headers
+    );
+
+    // Fetch track to get popularity (0-100)
+    const trackResp = await axios.get(
+      `https://api.spotify.com/v1/tracks/${encodeURIComponent(track_id)}`,
+      headers
+    );
+
+    const f = featuresResp.data || {};
+    const popularity = trackResp.data?.popularity ?? null;
+
+    return res.json({
+      track_id,
+      popularity,
+      features: {
+        danceability: f.danceability,
+        energy: f.energy,
+        valence: f.valence,
+        acousticness: f.acousticness,
+        instrumentalness: f.instrumentalness,
+        speechiness: f.speechiness,
+        tempo: f.tempo,
+        liveness: f.liveness,
+        key: f.key,
+        mode: f.mode,
+      }
+    });
+  } catch (error) {
+    console.error('Spotify audio-features error:', error.response?.data || error.message);
+    res.status(500).json({ error: 'Failed to get audio features', details: error.response?.data || error.message });
+  }
+});
+
 async function getDeezerPreview(query) {
   try {
     const response = await axios.get(
