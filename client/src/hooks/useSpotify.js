@@ -77,7 +77,8 @@ const useSpotify = () => {
       return results.tracks.items.map(track => ({
         id: track.id,
         title: track.name,
-        artist: track.artists[0]?.name || 'Unknown Artist',
+  artist: track.artists[0]?.name || 'Unknown Artist',
+  artists: (track.artists || []).map(a => ({ id: a.id, name: a.name, spotify_url: a.external_urls?.spotify })),
         album: track.album?.name || 'Unknown Album',
         image: track.album?.images[0]?.url || null,
         preview_url: track.preview_url,

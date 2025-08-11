@@ -259,8 +259,16 @@ const Home = ({ searchResult: externalResult, onSearchResults, onCollapseChange,
       if (result.song.lyrics) {
         result.song.lyrics = normalizeLyrics(result.song.lyrics);
       }
-  // Parse and attach featured artists (for bios)
-  result.song.featured_artists = parseFeaturedArtists(result.song.title);
+        // Attach featured artists from structured data if available, else parse title
+        if (Array.isArray(result.song.artists) && result.song.artists.length > 1) {
+          const primary = result.song.artist || result.song.artists[0].name;
+          const others = result.song.artists
+            .map(a => a.name)
+            .filter(n => n && n.toLowerCase() !== (primary || '').toLowerCase());
+          result.song.featured_artists = others;
+        } else {
+          result.song.featured_artists = parseFeaturedArtists(result.song.title);
+        }
       // Set result immediately - no recommendations initially
       setSearchResult(result);
       onSearchResults?.(result);
@@ -289,6 +297,16 @@ const Home = ({ searchResult: externalResult, onSearchResults, onCollapseChange,
                 result.song.preview_source = previewData.source || result.song.preview_source;
                 result.song.spotify_url = previewData.spotifyUrl || result.song.spotify_url;
                 result.song.spotify_id = previewData.spotifyId || result.song.spotify_id;
+                // Use Spotify artists array if present to detect collaborators/features
+                if (Array.isArray(previewData.artists) && previewData.artists.length > 0) {
+                  const primary = previewData.albumArtists?.[0]?.name || result.song.artist;
+                  const others = previewData.artists
+                    .map(a => a.name)
+                    .filter(n => n && n.toLowerCase() !== (primary || '').toLowerCase());
+                  if (others.length) {
+                    result.song.featured_artists = others;
+                  }
+                }
                 setSearchResult({ ...result });
                if (previewData.cover) computeDominantColorFromUrl(previewData.cover);
               }
@@ -559,8 +577,16 @@ const Home = ({ searchResult: externalResult, onSearchResults, onCollapseChange,
           if (result.song.lyrics) {
             result.song.lyrics = normalizeLyrics(result.song.lyrics);
           }
-          // Parse and attach featured artists (for bios)
-          result.song.featured_artists = parseFeaturedArtists(result.song.title);
+          // Attach featured artists from structured data if available, else parse title
+          if (Array.isArray(result.song.artists) && result.song.artists.length > 1) {
+            const primary = result.song.artist || result.song.artists[0].name;
+            const others = result.song.artists
+              .map(a => a.name)
+              .filter(n => n && n.toLowerCase() !== (primary || '').toLowerCase());
+            result.song.featured_artists = others;
+          } else {
+            result.song.featured_artists = parseFeaturedArtists(result.song.title);
+          }
           // Set the result immediately - no recommendations initially
           setSearchResult(result);
          // Compute dominant color from recommendation cover if available
@@ -587,6 +613,16 @@ const Home = ({ searchResult: externalResult, onSearchResults, onCollapseChange,
                   result.song.image = previewData.cover || result.song.image;
                   result.song.spotify_url = previewData.spotifyUrl || result.song.spotify_url;
                   result.song.spotify_id = previewData.spotifyId || result.song.spotify_id;
+                  // Use Spotify artists array if present to detect collaborators/features
+                  if (Array.isArray(previewData.artists) && previewData.artists.length > 0) {
+                    const primary = previewData.albumArtists?.[0]?.name || result.song.artist;
+                    const others = previewData.artists
+                      .map(a => a.name)
+                      .filter(n => n && n.toLowerCase() !== (primary || '').toLowerCase());
+                    if (others.length) {
+                      result.song.featured_artists = others;
+                    }
+                  }
                   
                   setSearchResult({...result});
                  if (previewData.cover) computeDominantColorFromUrl(previewData.cover);

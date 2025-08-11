@@ -85,6 +85,11 @@ router.get('/search', async (req, res) => {
       id: track.id,
       title: track.name,
       artist: track.artists[0]?.name || 'Unknown Artist',
+      artists: (track.artists || []).map(a => ({
+        id: a.id,
+        name: a.name,
+        spotify_url: a.external_urls?.spotify
+      })),
       album: track.album?.name || 'Unknown Album',
       image: track.album?.images[0]?.url || null,
       preview_url: track.preview_url,
@@ -132,6 +137,11 @@ router.get('/search-auth', async (req, res) => {
       id: track.id,
       title: track.name,
       artist: track.artists[0]?.name || 'Unknown Artist',
+      artists: (track.artists || []).map(a => ({
+        id: a.id,
+        name: a.name,
+        spotify_url: a.external_urls?.spotify
+      })),
       album: track.album?.name || 'Unknown Album',
       image: track.album?.images[0]?.url || null,
       preview_url: track.preview_url,
@@ -241,6 +251,11 @@ router.get('/recommendations', async (req, res) => {
       id: track.id,
       title: track.name,
       artist: track.artists[0]?.name || 'Unknown Artist',
+      artists: (track.artists || []).map(a => ({
+        id: a.id,
+        name: a.name,
+        spotify_url: a.external_urls?.spotify
+      })),
       album: track.album?.name || 'Unknown Album',
       image: track.album?.images[0]?.url || null,
       preview_url: track.preview_url,
@@ -367,7 +382,9 @@ async function getSpotifyPreview(query) {
       preview: track.preview_url,
       cover: track.album?.images[0]?.url,
       spotifyUrl: track.external_urls?.spotify,
-      spotifyId: track.id
+      spotifyId: track.id,
+  artists: (track.artists || []).map(a => ({ id: a.id, name: a.name, spotify_url: a.external_urls?.spotify })),
+  albumArtists: (track.album?.artists || []).map(a => ({ id: a.id, name: a.name, spotify_url: a.external_urls?.spotify }))
     };
 
   } catch (error) {
