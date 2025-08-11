@@ -297,20 +297,6 @@ const Home = ({ searchResult: externalResult, onSearchResults, onCollapseChange,
                 result.song.preview_source = previewData.source || result.song.preview_source;
                 result.song.spotify_url = previewData.spotifyUrl || result.song.spotify_url;
                 result.song.spotify_id = previewData.spotifyId || result.song.spotify_id;
-  // Compute collaborator names once per render for display badges/line
-  const collaboratorNames = (() => {
-    const song = searchResult?.song;
-    if (!song) return [];
-    if (Array.isArray(song.featured_artists) && song.featured_artists.length > 0) {
-      return song.featured_artists;
-    }
-    if (Array.isArray(song.artists) && song.artist) {
-      return song.artists
-        .map(a => a?.name)
-        .filter(n => n && n.toLowerCase() !== (song.artist || '').toLowerCase());
-    }
-    return [];
-  })();
   
                 result.song.preview_url = previewData.preview || result.song.preview_url;
                 result.song.preview_source = previewData.source || result.song.preview_source;
@@ -886,6 +872,32 @@ const Home = ({ searchResult: externalResult, onSearchResults, onCollapseChange,
       background-clip: content-box;
     }
   `;
+
+  // Compute collaborator names for badges and the "with …" line, based on current searchResult
+  const collaboratorNames = React.useMemo(() => {
+    const song = searchResult?.song;
+    if (!song) return [];
+    // Prefer explicitly set featured_artists
+    if (Array.isArray(song.featured_artists) && song.featured_artists.length > 0) {
+      return song.featured_artists;
+    }
+    // Otherwise derive from Spotify artists array (exclude primary artist)
+    if (Array.isArray(song.artists) && song.artist) {
+      const primary = (song.artist || '').toLowerCase();
+      const others = song.artists
+        .map(a => a?.name)
+        .filter(n => n && n.toLowerCase() !== primary)
+        .map(n => n.trim());
+      // De-duplicate while preserving order
+      const seen = new Set();
+      return others.filter(n => (seen.has(n.toLowerCase()) ? false : (seen.add(n.toLowerCase()), true)));
+    }
+    // Fallback to parsing the title
+    if (song.title) {
+      return parseFeaturedArtists(song.title);
+    }
+    return [];
+  }, [searchResult]);
 
   return (
     <>
