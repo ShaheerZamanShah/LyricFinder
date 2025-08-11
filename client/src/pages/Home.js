@@ -935,7 +935,7 @@ const Home = ({ searchResult: externalResult, onSearchResults, onCollapseChange,
             }`}>
               {/* Album Art & Song Info */}
               <div className="flex flex-col items-center gap-4">
-                <div className="w-full flex items-start justify-center gap-4">
+                <div className="w-full flex flex-col md:flex-row items-center md:items-start justify-center gap-4">
                   <div 
                     className="relative group cursor-pointer"
                     onClick={(e) => {
@@ -1003,15 +1003,13 @@ const Home = ({ searchResult: externalResult, onSearchResults, onCollapseChange,
                     }}>
                     </div>
                   </div>
-                  {/* Insights panel on the right of the vinyl (visible on md+) */}
+                  {/* Insights panel: below on small screens, right of vinyl on md+ */}
                   {searchResult?.song?.spotify_id && (
-                    <div className="hidden md:block">
-                      <SongInsights 
-                        spotifyId={searchResult.song.spotify_id} 
-                        theme={theme} 
-                        coverColor={coverColor} 
-                      />
-                    </div>
+                    <SongInsights 
+                      spotifyId={searchResult.song.spotify_id} 
+                      theme={theme} 
+                      coverColor={coverColor} 
+                    />
                   )}
                 </div>
                 
