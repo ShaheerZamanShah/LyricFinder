@@ -169,300 +169,1177 @@ const Home = ({ searchResult: externalResult, onSearchResults, onCollapseChange,
       if (toggleClicked) return;
       if (!searchContainerRef.current) return;
       const clickedInside = searchContainerRef.current.contains(e.target);
-      // CLEAN REWRITE
-      import React, { useState, useEffect, useRef, useMemo } from 'react';
-      import SearchForm from '../components/SearchForm';
-      import ArtistList from '../components/ArtistList';
-      import { Music, Play, Pause, ExternalLink } from 'lucide-react';
-      import { useTheme } from '../contexts/ThemeContext';
-      import useSpotify from '../hooks/useSpotify';
-      import { API_ENDPOINTS } from '../config/api';
-
-      const FALLBACK_IMG = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjAwIiBoZWlnaHQ9IjIwMCIgZmlsbD0ibm9uZSIgdmlld0JveD0iMCAwIDIwMCAyMDAiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PHJlY3Qgd2lkdGg9IjIwMCIgaGVpZ2h0PSIyMDAiIGZpbGw9IiMzMzMiLz48cGF0aCBkPSJNODQgNjR2NzIuMTRhMjQgMjQgMCAxIDAgMTIgMjAuNzZWNjRIMTQuNjI1YTIgMiAwIDAgMCAwIDRoNjkuMzc1Wk0xMzYgNjR2OTIuMTRiLTUuNzgtMy4yNi0xMi0yLjY2LTEyLTEwLjE0VjY0aC00OC4wMWEyIDIgMCAwIDAgMCA0SDEyMGExNiAxNiAwIDAgMSAxNiAxNnptLTE2IDk2YTggOCAwIDEgMSAwLTE2IDggOCAwIDAgMSAwIDE2eiIgZmlsbD0iI2ZmZiIvPjwvc3ZnPg==';
-
-      // Parse (feat./ft./featuring ...) segments from the title
-      function parseFeatured(title = '') {
-        const PATTERNS = [/(?:\(|-\s*)(?:feat\.|ft\.|featuring)\s+([^\)\-]+)/i];
-        for (const re of PATTERNS) {
-          const m = title.match(re);
-          if (m && m[1]) {
-            return m[1]
-              .split(/,|&|x|\+|\band\b/i)
-              .map(s => s.replace(/[\[\](){}]/g, '').trim())
-              .filter(Boolean);
-          }
+      if (!clickedInside) {
+        if (searchResult && searchResult.song) {
+          onCollapseChange?.(true);
         }
-        return [];
       }
+    };
+    document.addEventListener('mousedown', handleDocMouseDown);
+    return () => document.removeEventListener('mousedown', handleDocMouseDown);
+  }, [searchResult, onCollapseChange]);
 
-      function dedupe(list) {
-        const seen = new Set();
-        return list.filter(n => {
-          const key = n.toLowerCase();
-          if (seen.has(key)) return false; seen.add(key); return true;
-        });
+  useEffect(() => {
+    const timer1 = setTimeout(() => {
+      setShowLyric(true);
+      setStep(1);
+    }, 200); // Much faster
+
+    const timer2 = setTimeout(() => {
+      setShowFinder(true);
+      setStep(2);
+    }, 400); // Much faster
+
+    const timer3 = setTimeout(() => {
+      setShowTagline(true);
+      setStep(3);
+    }, 600); // Much faster
+
+    const timer4 = setTimeout(() => {
+      setFadeOut(true);
+      setStep(4);
+    }, 800); // Much faster
+
+    const timer5 = setTimeout(() => {
+      setShowIntro(false);
+    }, 1000); // Much faster
+
+    return () => {
+      clearTimeout(timer1);
+      clearTimeout(timer2);
+      clearTimeout(timer3);
+      clearTimeout(timer4);
+      clearTimeout(timer5);
+    };
+  }, []);
+
+  // Handle keyboard events for lyrics modal
+  useEffect(() => {
+    const handleKeyDown = (event) => {
+      if (event.key === 'Escape' && isLyricsModalOpen) {
+        setIsLyricsModalOpen(false);
       }
+    };
 
-      function cleanLyrics(raw) {
-        if (!raw) return '';
-        return raw
-          .replace(/\r\n?/g, '\n')
-          .replace(/^\s*lyrics\s*$/gim, '')
-          .replace(/\n{3,}/g, '\n\n')
-          .trim();
+    if (isLyricsModalOpen) {
+      document.addEventListener('keydown', handleKeyDown);
+      // Prevent body scroll when modal is open
+      document.body.style.overflow = 'hidden';
+    } else {
+      document.body.style.overflow = 'unset';
+    }
+
+    return () => {
+      document.removeEventListener('keydown', handleKeyDown);
+      document.body.style.overflow = 'unset';
+    };
+  }, [isLyricsModalOpen]);
+
+  const handleSearchResults = async (result) => {
+    console.log('=== Search Results Debug ===');
+    console.log('Full result object:', result);
+    console.log('Song object:', result?.song);
+    console.log('Song image:', result?.song?.image);
+    console.log('Song title:', result?.song?.title);
+    console.log('Song artist:', result?.song?.artist);
+    console.log('Song preview_url:', result?.song?.preview_url);
+    console.log('=== End Search Results Debug ===');
+
+    // Stop any currently playing audio when searching for a new song
+    if (audioRef) {
+      audioRef.pause();
+      setIsPlaying(false);
+      setAudioRef(null);
+    }
+    
+    // Minimal processing for fastest display
+    if (result && result.song) {
+      if (!result.song.artist_bio) {
+        result.song.artist_bio = `${result.song.artist} is a talented artist known for their distinctive style and memorable songs.`;
       }
+      if (result.song.lyrics) {
+        result.song.lyrics = normalizeLyrics(result.song.lyrics);
+      }
+        // Attach featured artists from structured data if available, else parse title
+        if (Array.isArray(result.song.artists) && result.song.artists.length > 1) {
+          const primary = result.song.artist || result.song.artists[0].name;
+          const others = result.song.artists
+            .map(a => a.name)
+            .filter(n => n && n.toLowerCase() !== (primary || '').toLowerCase());
+          result.song.featured_artists = others;
+        } else {
+          result.song.featured_artists = parseFeaturedArtists(result.song.title);
+        }
+      // Set result immediately - no recommendations initially
+      setSearchResult(result);
+      onSearchResults?.(result);
+     // Try to compute dominant color from current image
+     if (result.song.image) {
+       computeDominantColorFromUrl(result.song.image);
+     } else {
+       setCoverColor(null);
+       onCoverColorChange?.(null);
+     }
 
-      const Home = ({ searchResult: initial, onSearchResults, onCollapseChange, isSearchCollapsed }) => {
-        const { theme } = useTheme();
-        const { getRecommendations } = useSpotify();
-        const [result, setResult] = useState(initial || null);
-        const [isPlaying, setIsPlaying] = useState(false);
-        const [audio, setAudio] = useState(null);
-        const [showLyricsModal, setShowLyricsModal] = useState(false);
-        const [recsLoading, setRecsLoading] = useState(false);
-        const [recSongLoading, setRecSongLoading] = useState(false);
-        const searchRef = useRef(null);
+      // Proactively fetch preview and high-quality cover so the album image shows without clicking
+      (async () => {
+        try {
+          const needsCover = !result.song.image || result.song.image.startsWith('data:image');
+          const needsPreview = !result.song.preview_url || !result.song.spotify_id || !result.song.spotify_url;
 
-        // Aggregate artists each render from available sources
-        const aggregatedArtists = useMemo(() => {
-          const song = result?.song;
-          if (!song) return [];
-          const primary = song.artist || song.artists?.[0]?.name;
-          const structured = (song.artists || []).map(a => a.name).filter(Boolean);
-          const featured = (song.featured_artists || []).filter(Boolean);
-          const parsed = parseFeatured(song.title || '');
-          const all = [primary, ...structured, ...featured, ...parsed].filter(Boolean);
-          return dedupe(all).map(n => ({ name: n }));
-        }, [result]);
-
-        useEffect(() => { setResult(initial || null); }, [initial]);
-
-        // Collapse when clicking outside (only if we have a song shown)
-        useEffect(() => {
-          function onDoc(e) {
-            if (!result?.song) return;
-            if (!searchRef.current) return;
-            if (!searchRef.current.contains(e.target)) onCollapseChange?.(true);
+          // Fetch Spotify preview/details if needed
+          if (needsCover || needsPreview) {
+            const resp = await fetch(`${API_ENDPOINTS.SPOTIFY_PREVIEW}?q=${encodeURIComponent(`${result.song.title} ${result.song.artist}`)}`);
+            if (resp.ok) {
+              const previewData = await resp.json();
+              if (previewData) {
+                result.song.image = previewData.cover || result.song.image;
+                result.song.preview_url = previewData.preview || result.song.preview_url;
+                result.song.preview_source = previewData.source || result.song.preview_source;
+                result.song.spotify_url = previewData.spotifyUrl || result.song.spotify_url;
+                result.song.spotify_id = previewData.spotifyId || result.song.spotify_id;
+  
+                result.song.preview_url = previewData.preview || result.song.preview_url;
+                result.song.preview_source = previewData.source || result.song.preview_source;
+                result.song.spotify_url = previewData.spotifyUrl || result.song.spotify_url;
+                result.song.spotify_id = previewData.spotifyId || result.song.spotify_id;
+                // Persist structured artist data for UI
+                if (Array.isArray(previewData.artists)) {
+                  result.song.artists = previewData.artists;
+                }
+                if (Array.isArray(previewData.albumArtists)) {
+                  result.song.album_artists = previewData.albumArtists;
+                }
+                // Use Spotify artists array if present to detect collaborators/features
+                if (Array.isArray(previewData.artists) && previewData.artists.length > 0) {
+                  const primary = previewData.albumArtists?.[0]?.name || result.song.artist;
+                  const others = previewData.artists
+                    .map(a => a.name)
+                    .filter(n => n && n.toLowerCase() !== (primary || '').toLowerCase());
+                  if (others.length) {
+                    result.song.featured_artists = others;
+                  }
+                }
+                setSearchResult({ ...result });
+               if (previewData.cover) computeDominantColorFromUrl(previewData.cover);
+              }
+            }
           }
-          document.addEventListener('mousedown', onDoc);
-          return () => document.removeEventListener('mousedown', onDoc);
-        }, [result, onCollapseChange]);
 
-        // Cleanup audio on unmount
-        useEffect(() => () => { if (audio) audio.pause(); }, [audio]);
-
-        async function enrichWithSpotify(song) {
+          // Resolve exact YouTube link (safe if no key configured)
           try {
-            if (song.preview_url && song.spotify_url) return song; // already enriched
-            const resp = await fetch(`${API_ENDPOINTS.SPOTIFY_PREVIEW}?q=${encodeURIComponent(`${song.title} ${song.artist}`)}`);
-            if (!resp.ok) return song;
-            const data = await resp.json();
-            return {
-              ...song,
-              image: data.cover || song.image,
-              preview_url: data.preview || song.preview_url,
-              preview_source: data.source || song.preview_source,
-              spotify_url: data.spotifyUrl || song.spotify_url,
-              spotify_id: data.spotifyId || song.spotify_id,
-              artists: Array.isArray(data.artists) ? data.artists : song.artists,
-              album_artists: Array.isArray(data.albumArtists) ? data.albumArtists : song.album_artists,
+            const ytResp = await fetch(`${API_ENDPOINTS.YOUTUBE_LINK}?q=${encodeURIComponent(`${result.song.title} ${result.song.artist}`)}`);
+            if (ytResp.ok) {
+              const ytData = await ytResp.json();
+              if (ytData && ytData.url) {
+                result.song.youtube_url = ytData.url;
+                setSearchResult({ ...result });
+              }
+            }
+          } catch {}
+        } catch (e) {
+          console.error('Error preloading preview/cover or youtube link:', e);
+        }
+      })();
+      
+      // Start background recommendations immediately (no 2 second delay)
+      setIsLoadingRecommendations(true);
+      setTimeout(async () => {
+        try {
+          const recommendations = await getSpotifyRecommendations(result.song.spotify_id, result.song.artist);
+          result.song.recommendations = (recommendations || []).slice(0, 10);
+          setSearchResult({ ...result });
+        } catch (error) {
+          result.song.recommendations = getFallbackRecommendations();
+          setSearchResult({ ...result });
+        }
+        setIsLoadingRecommendations(false);
+      }, 100);
+    } else {
+      setSearchResult(result);
+      // Notify parent even when no song to keep state in sync
+      onSearchResults?.(result);
+    }
+  };
+
+  const playAudio = async (audioUrl) => {
+    // If currently playing, pause and stop
+    if (isPlaying && audioRef) {
+      console.log('Stopping currently playing audio');
+      audioRef.pause();
+      audioRef.currentTime = 0;
+      setIsPlaying(false);
+      setAudioRef(null);
+      return;
+    }
+
+    // Stop any existing audio before starting new one
+    if (audioRef) {
+      console.log('Cleaning up existing audio reference');
+      audioRef.pause();
+      audioRef.currentTime = 0;
+      setAudioRef(null);
+    }
+
+    try {
+      console.log('Attempting to play:', audioUrl);
+      // Create new audio instance
+      const audio = new Audio(audioUrl);
+      audio.volume = 0.7;
+      audio.preload = 'auto';
+      audio.crossOrigin = 'anonymous';
+      
+      // Set up event listeners
+      const handleEnded = () => {
+        setIsPlaying(false);
+        setAudioRef(null);
+        audio.removeEventListener('ended', handleEnded);
+        audio.removeEventListener('error', handleError);
+      };
+      
+      const handleError = (e) => {
+        console.error('Audio error:', e, audio.error);
+        alert(`🎵 Audio playback failed\n\nError: ${audio.error?.message || 'Unknown error'}\n\nTry listening on Spotify or YouTube instead!`);
+        setIsPlaying(false);
+        setAudioRef(null);
+        audio.removeEventListener('ended', handleEnded);
+        audio.removeEventListener('error', handleError);
+      };
+      
+      audio.addEventListener('ended', handleEnded);
+      audio.addEventListener('error', handleError);
+      
+      // Attempt to play
+      try {
+        console.log('Starting audio playback...');
+        const playPromise = audio.play();
+        
+        if (playPromise !== undefined) {
+          await playPromise;
+          console.log('Audio started successfully');
+          setIsPlaying(true);
+          setAudioRef(audio);
+        }
+      } catch (playError) {
+        console.error('Play error:', playError);
+        alert(`🎵 Playback failed: ${playError.message}\n\nThis might be due to browser autoplay restrictions. Try clicking the album cover again!`);
+        setIsPlaying(false);
+        setAudioRef(null);
+        audio.removeEventListener('ended', handleEnded);
+        audio.removeEventListener('error', handleError);
+      }
+    } catch (error) {
+      alert(`🎵 Error creating audio: ${error.message}`);
+      setIsPlaying(false);
+      setAudioRef(null);
+    }
+  };
+
+  const handleAlbumCoverClick = async () => {
+    console.log('=== Album Cover Click Debug ===');
+    console.log('Album cover clicked');
+    console.log('Search result object:', searchResult);
+    console.log('Song object:', searchResult?.song);
+    console.log('Preview URL:', searchResult?.song?.preview_url);
+    console.log('Preview URL type:', typeof searchResult?.song?.preview_url);
+    console.log('Preview URL length:', searchResult?.song?.preview_url?.length);
+    console.log('Preview source:', searchResult?.song?.preview_source);
+    console.log('=== End Debug ===');
+    
+    // If no preview URL, try to fetch one first
+    if (!searchResult?.song?.preview_url) {
+      console.log('No preview URL found - attempting to fetch one...');
+      
+      try {
+        const response = await fetch(`${API_ENDPOINTS.SPOTIFY_PREVIEW}?q=${encodeURIComponent(`${searchResult.song.title} ${searchResult.song.artist}`)}`);
+        
+        if (response.ok) {
+          const previewData = await response.json();
+          console.log('Preview data received:', previewData);
+          
+          if (previewData.preview || previewData.spotifyUrl) {
+            // Update the search result with preview data
+            const updatedResult = {
+              ...searchResult,
+              song: {
+                ...searchResult.song,
+                preview_url: previewData.preview || searchResult.song.preview_url,
+                preview_source: previewData.source || searchResult.song.preview_source,
+                image: previewData.cover || searchResult.song.image,
+                spotify_url: previewData.spotifyUrl || searchResult.song.spotify_url,
+                spotify_id: previewData.spotifyId || searchResult.song.spotify_id
+              }
             };
-          } catch { return song; }
-        }
-
-        function attachFeatured(song) {
-          if (!song) return song;
-          if (!song.featured_artists || !song.featured_artists.length) {
-            if (Array.isArray(song.artists) && song.artists.length > 1) {
-              const primary = song.artist || song.artists[0].name;
-              song.featured_artists = song.artists
-                .map(a => a.name)
-                .filter(n => n && n.toLowerCase() !== primary?.toLowerCase());
-            } else {
-              song.featured_artists = parseFeatured(song.title);
+            
+            setSearchResult(updatedResult);
+            console.log('Preview/Spotify URL found!');
+            
+            // Now try to play if preview exists
+            if (previewData.preview) {
+              await playAudio(previewData.preview);
+              return;
             }
           }
-          return song;
         }
+      } catch (error) {
+        console.error('Failed to fetch preview:', error);
+      }
+      
+      // If we still don't have a preview URL, show the alert
+      console.log('No preview URL available - showing alert');
+      alert(`🎵 Audio preview not available for "${searchResult?.song?.title}"\n\nThis is common for popular songs due to licensing restrictions. You can listen to the full song on Spotify or YouTube using the buttons below!`);
+      return;
+    }
 
-        async function handleSearchResults(r) {
-          if (audio) { audio.pause(); setIsPlaying(false); setAudio(null); }
-          if (!r || !r.song) { setResult(r); onSearchResults?.(r); return; }
-          r.song.lyrics = cleanLyrics(r.song.lyrics);
-          attachFeatured(r.song);
-          setResult(r); // immediate UI
-          onSearchResults?.(r);
-          // Async enrichment (preview, spotify, youtube, recs)
-          (async () => {
-            const enrichedSong = await enrichWithSpotify(r.song);
+    console.log('Preview URL exists, proceeding with playback...');
+    await playAudio(searchResult.song.preview_url);
+  };
+
+  const getSpotifyRecommendations = async (spotifyId, artistName) => {
+    try {
+      const recommendations = await getRecommendations(spotifyId, artistName);
+      
+      const formattedRecs = recommendations.map((rec, index) => ({
+        id: `spotify_${rec.id}_${Date.now()}_${index}`,
+        title: rec.title,
+        artist: rec.artist,
+        thumbnail: rec.image || 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNjQiIGhlaWdodD0iNjQiIHZpZXdCb3g9IjAgMCA2NCA2NCIgZmlsbD0ibm9uZSIgeG1zbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHJlY3Qgd2lkdGg9IjY0IiBoZWlnaHQ9IjY0IiBmaWxsPSIjMzMzIi8+Cjx0ZXh0IHg9IjMyIiB5PSI0MCIgdGV4dC1hbmNob3I9Im1pZGRsZSIgZmlsbD0iIzY2NiIgZm9udC1zaXplPSIyNCIgZm9udC1mYW1pbHk9IkFyaWFsIj7imaE8L3RleHQ+Cjwvc3ZnPg==',
+        spotify_id: rec.spotify_id
+      }));
+      
+      return formattedRecs;
+    } catch (error) {
+      console.error('Error getting Spotify recommendations:', error);
+      throw error;
+    }
+  };
+
+  const getFallbackRecommendations = () => {
+    // More diverse fallback songs that change randomly
+    const allFallbackSongs = [
+      { artist: "The Weeknd", title: "Blinding Lights", image: "https://i.scdn.co/image/ab67616d00001e02c06f0e8b33d17de4e8e0ec86" },
+      { artist: "Adele", title: "Hello", image: "https://i.scdn.co/image/ab67616d00001e02cd519fa579e8c2d24e35a39b" },
+      { artist: "Ed Sheeran", title: "Shape of You", image: "https://i.scdn.co/image/ab67616d00001e02ba5db46f4b838ef6027e6f96" },
+      { artist: "Billie Eilish", title: "bad guy", image: "https://i.scdn.co/image/ab67616d00001e0250a3147b4edd7701a876c6ce" },
+      { artist: "Post Malone", title: "Circles", image: "https://i.scdn.co/image/ab67616d00001e029478c87599550dd73bfa7e02" },
+      { artist: "Dua Lipa", title: "Levitating", image: "https://i.scdn.co/image/ab67616d00001e02be841ba4bc24340152e3a79a" },
+      { artist: "Taylor Swift", title: "Anti-Hero", image: "https://i.scdn.co/image/ab67616d0000b273bb54dde68cd23e2a268ae0f5" },
+      { artist: "Harry Styles", title: "As It Was", image: "https://i.scdn.co/image/ab67616d0000b273b46f74097655d7f353caab14" },
+      { artist: "Bad Bunny", title: "Me Porto Bonito", image: "https://i.scdn.co/image/ab67616d0000b273f63c6a15e9dc098e73b4c545" },
+      { artist: "Olivia Rodrigo", title: "good 4 u", image: "https://i.scdn.co/image/ab67616d0000b273a91c10fe9472d9bd89802e5a" },
+      { artist: "Drake", title: "God's Plan", image: "https://i.scdn.co/image/ab67616d0000b273f907de96b9a4fbc04accc0d5" },
+      { artist: "Ariana Grande", title: "positions", image: "https://i.scdn.co/image/ab67616d0000b273be841ba4bc24340152e3a79a" },
+      { artist: "Justin Bieber", title: "Peaches", image: "https://i.scdn.co/image/ab67616d0000b273a91c10fe9472d9bd89802e5a" },
+      { artist: "Lil Nas X", title: "MONTERO", image: "https://i.scdn.co/image/ab67616d0000b273be841ba4bc24340152e3a79a" },
+      { artist: "SZA", title: "Good Days", image: "https://i.scdn.co/image/ab67616d0000b273f63c6a15e9dc098e73b4c545" },
+      { artist: "BTS", title: "Dynamite", image: "https://i.scdn.co/image/ab67616d0000b273bb54dde68cd23e2a268ae0f5" }
+    ];
+
+  // Shuffle and take 10 random songs each time to fill 5-per-row nicely
+    const shuffled = allFallbackSongs.sort(() => 0.5 - Math.random());
+  const selected = shuffled.slice(0, 10);
+    
+    return selected.map((song, index) => ({
+      id: `fallback_${Date.now()}_${index}`, // Add timestamp for uniqueness
+      title: song.title,
+      artist: song.artist,
+      thumbnail: song.image || 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNjQiIGhlaWdodD0iNjQiIHZpZXdCb3g9IjAgMCA2NCA2NCIgZmlsbD0ibm9uZSIgeG1zbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHJlY3Qgd2lkdGg9IjY0IiBoZWlnaHQ9IjY0IiBmaWxsPSIjMzMzIi8+Cjx0ZXh0IHg9IjMyIiB5PSI0MCIgdGV4dC1hbmNob3I9Im1pZGRsZSIgZmlsbD0iIzY2NiIgZm9udC1zaXplPSIyNCIgZm9udC1mYW1pbHk9IkFyaWFsIj7imaE8L3RleHQ+Cjwvc3ZnPg=='
+    }));
+  };
+
+  const handleRecommendationClick = async (recommendation) => {
+    // Set loading state for the specific recommendation
+    setIsLoadingRecommendationSong(true);
+    
+    // Stop any currently playing audio when clicking a recommendation
+    if (audioRef) {
+      audioRef.pause();
+      audioRef.currentTime = 0;
+      setIsPlaying(false);
+      setAudioRef(null);
+    }
+    
+    try {
+      const response = await fetch(API_ENDPOINTS.SEARCH_LYRICS, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ 
+          title: recommendation.title, 
+          artist: recommendation.artist 
+        }),
+      });
+
+      if (response.ok) {
+        const result = await response.json();
+        
+        console.log('=== Recommendation Click Debug ===');
+        console.log('API Response result:', result);
+        console.log('Song object:', result.song);
+        console.log('Image URL:', result.song?.image);
+        console.log('Preview URL:', result.song?.preview_url);
+        console.log('Spotify URL:', result.song?.spotify_url);
+        console.log('=== End Debug ===');
+        
+        if (result.song) {
+          // Minimal processing - no heavy cleaning
+          if (!result.song.artist_bio) {
+            result.song.artist_bio = `${result.song.artist} is a talented artist known for their distinctive style and memorable songs.`;
+          }
+          if (result.song.lyrics) {
+            result.song.lyrics = normalizeLyrics(result.song.lyrics);
+          }
+          // Attach featured artists from structured data if available, else parse title
+          if (Array.isArray(result.song.artists) && result.song.artists.length > 1) {
+            const primary = result.song.artist || result.song.artists[0].name;
+            const others = result.song.artists
+              .map(a => a.name)
+              .filter(n => n && n.toLowerCase() !== (primary || '').toLowerCase());
+            result.song.featured_artists = others;
+          } else {
+            result.song.featured_artists = parseFeaturedArtists(result.song.title);
+          }
+          // Set the result immediately - no recommendations initially
+          setSearchResult(result);
+         // Compute dominant color from recommendation cover if available
+         if (result.song.image) {
+           computeDominantColorFromUrl(result.song.image);
+         } else {
+           setCoverColor(null);
+           onCoverColorChange?.(null);
+         }
+          
+          // If no preview URL, try to fetch one from our backend immediately
+          if (!result.song.preview_url || !result.song.spotify_url) {
             try {
-              const yt = await fetch(`${API_ENDPOINTS.YOUTUBE_LINK}?q=${encodeURIComponent(`${enrichedSong.title} ${enrichedSong.artist}`)}`);
-              if (yt.ok) {
-                const yd = await yt.json();
-                if (yd?.url) enrichedSong.youtube_url = yd.url;
+              const response = await fetch(`${API_ENDPOINTS.SPOTIFY_PREVIEW}?q=${encodeURIComponent(`${result.song.title} ${result.song.artist}`)}`);
+              
+              if (response.ok) {
+                const previewData = await response.json();
+                
+                if (previewData) {
+                  if (previewData.preview) {
+                    result.song.preview_url = previewData.preview;
+                    result.song.preview_source = previewData.source;
+                  }
+                  result.song.image = previewData.cover || result.song.image;
+                  result.song.spotify_url = previewData.spotifyUrl || result.song.spotify_url;
+                  result.song.spotify_id = previewData.spotifyId || result.song.spotify_id;
+                  // Persist structured artist data for UI
+                  if (Array.isArray(previewData.artists)) {
+                    result.song.artists = previewData.artists;
+                  }
+                  if (Array.isArray(previewData.albumArtists)) {
+                    result.song.album_artists = previewData.albumArtists;
+                  }
+                  // Use Spotify artists array if present to detect collaborators/features
+                  if (Array.isArray(previewData.artists) && previewData.artists.length > 0) {
+                    const primary = previewData.albumArtists?.[0]?.name || result.song.artist;
+                    const others = previewData.artists
+                      .map(a => a.name)
+                      .filter(n => n && n.toLowerCase() !== (primary || '').toLowerCase());
+                    if (others.length) {
+                      result.song.featured_artists = others;
+                    }
+                  }
+                  
+                  setSearchResult({...result});
+                 if (previewData.cover) computeDominantColorFromUrl(previewData.cover);
+                }
               }
-            } catch {}
-            setRecsLoading(true);
-            try {
-              if (enrichedSong.spotify_id) {
-                const recs = await getRecommendations(enrichedSong.spotify_id, enrichedSong.artist);
-                enrichedSong.recommendations = recs.map((rec, i) => ({
-                  id: rec.id || `rec_${i}`,
-                  title: rec.title,
-                  artist: rec.artist,
-                  thumbnail: rec.image || FALLBACK_IMG
-                }));
-              }
-            } catch {
-              enrichedSong.recommendations = [];
+            } catch (error) {
+              console.error('Failed to fetch preview:', error);
             }
-            setRecsLoading(false);
-            setResult(prev => prev ? { ...prev, song: { ...enrichedSong } } : prev);
-          })();
-        }
+          }
 
-        async function handleRecClick(rec) {
-          if (!rec) return;
-          setRecSongLoading(true);
+          // Resolve exact YouTube link
           try {
-            const resp = await fetch(API_ENDPOINTS.SEARCH_LYRICS, {
-              method: 'POST', headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ title: rec.title, artist: rec.artist })
-            });
-            if (!resp.ok) return;
-            const r = await resp.json();
-            if (r?.song) {
-              r.song.lyrics = cleanLyrics(r.song.lyrics);
-              attachFeatured(r.song);
-              setResult(r);
-              // enrich
-              handleSearchResults(r);
-              window.scrollTo({ top: 160, behavior: 'smooth' });
+            const ytResp = await fetch(`${API_ENDPOINTS.YOUTUBE_LINK}?q=${encodeURIComponent(`${result.song.title} ${result.song.artist}`)}`);
+            if (ytResp.ok) {
+              const ytData = await ytResp.json();
+              if (ytData && ytData.url) {
+                result.song.youtube_url = ytData.url;
+                setSearchResult({ ...result });
+              }
             }
-          } finally { setRecSongLoading(false); }
+          } catch {}
+          
+          // Load recommendations in background (remove artificial delay)
+          setIsLoadingRecommendations(true);
+          setTimeout(async () => {
+            try {
+              const recommendations = await getSpotifyRecommendations(result.song.spotify_id, result.song.artist);
+              result.song.recommendations = (recommendations || []).slice(0, 10);
+              setSearchResult({...result});
+            } catch (error) {
+              result.song.recommendations = getFallbackRecommendations();
+              setSearchResult({...result});
+            }
+            setIsLoadingRecommendations(false);
+          }, 100); // Reduced from 2000ms to 100ms - just enough to let UI update
+          
+          // Scroll to top of results
+          window.scrollTo({ top: 200, behavior: 'smooth' });
+        } else {
+          alert(`Sorry, couldn't find lyrics for "${recommendation.title}" by ${recommendation.artist}`);
         }
+      } else {
+        alert(`Failed to search for the song. Server responded with status ${response.status}.`);
+      }
+    } catch (error) {
+      console.error('Error fetching recommendation lyrics:', error);
+      alert(`Network error occurred while searching. Please check your connection and try again.`);
+    } finally {
+      setIsLoadingRecommendationSong(false);
+    }
+  };
 
-        async function togglePlay() {
-          if (!result?.song?.preview_url) return;
-          if (audio) {
-            if (isPlaying) { audio.pause(); setIsPlaying(false); return; }
-            await audio.play(); setIsPlaying(true); return;
-          }
-          const a = new Audio(result.song.preview_url);
-          a.onended = () => setIsPlaying(false);
-          try { await a.play(); setAudio(a); setIsPlaying(true); } catch { /* ignore */ }
-        }
+  const getTextColor = () => {
+    switch (theme) {
+      case 'light': return 'text-gray-900';
+      case 'medium': return 'text-gray-100';
+      case 'dark': return 'text-white';
+      default: return 'text-gray-900';
+    }
+  };
 
-        const textTone = theme === 'light' ? 'text-gray-900' : 'text-gray-100';
+  const animationStyles = `
+    @keyframes wave {
+      0%, 100% { height: 0.5rem; }
+      50% { height: 2rem; }
+    }
+    @keyframes fadeIn {
+      0% { opacity: 0; transform: scale(0.95); }
+      100% { opacity: 1; transform: scale(1); }
+    }
+    @keyframes equalize {
+      0% {
+        height: 10px;
+      }
+      100% {
+        height: 50px;
+      }
+    }
+    @keyframes fadeInMain {
+      from {
+        opacity: 0;
+      }
+      to {
+        opacity: 1;
+      }
+    }
+    @keyframes spin {
+      from {
+        transform: rotate(0deg);
+      }
+      to {
+        transform: rotate(360deg);
+      }
+    }
+    .vinyl-record {
+      position: relative;
+      border-radius: 50%;
+      background: linear-gradient(145deg, #1a1a1a 0%, #2d2d2d 25%, #1a1a1a 50%, #2d2d2d 75%, #1a1a1a 100%);
+      box-shadow: 
+        0 0 0 8px #0f0f0f,
+        0 0 0 12px #2a2a2a,
+        0 8px 32px rgba(0, 0, 0, 0.6),
+        inset 0 0 0 2px rgba(255, 255, 255, 0.1);
+    }
+    .vinyl-record::before {
+      content: '';
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      width: 24px;
+      height: 24px;
+      background: #1a1a1a;
+      border-radius: 50%;
+      transform: translate(-50%, -50%);
+      box-shadow: 
+        0 0 0 2px #333,
+        0 0 0 4px #1a1a1a,
+        inset 0 2px 4px rgba(0, 0, 0, 0.8);
+    }
+    .vinyl-record::after {
+      content: '';
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      width: 6px;
+      height: 6px;
+      background: #000;
+      border-radius: 50%;
+      transform: translate(-50%, -50%);
+      z-index: 10;
+    }
+    .vinyl-spinning {
+      animation: spin 2s linear infinite;
+    }
+    .album-cover {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      width: 70%;
+      height: 70%;
+      border-radius: 50%;
+      transform: translate(-50%, -50%);
+      object-fit: cover;
+      z-index: 5;
+      box-shadow: 
+        inset 0 0 20px rgba(0, 0, 0, 0.3),
+        0 2px 8px rgba(0, 0, 0, 0.4);
+    }
+    
+    /* Custom Scrollbar Styles */
+    .custom-scrollbar {
+      scrollbar-width: thin;
+      scrollbar-color: rgba(156, 163, 175, 0.5) transparent;
+    }
+    
+    .custom-scrollbar::-webkit-scrollbar {
+      width: 8px;
+    }
+    
+    .custom-scrollbar::-webkit-scrollbar-track {
+      background: transparent;
+      border-radius: 10px;
+    }
+    
+    .custom-scrollbar::-webkit-scrollbar-thumb {
+      background: rgba(156, 163, 175, 0.3);
+      border-radius: 10px;
+      border: 2px solid transparent;
+      background-clip: content-box;
+    }
+    
+    .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+      background: rgba(156, 163, 175, 0.5);
+      background-clip: content-box;
+    }
+    
+    /* Dark theme scrollbar */
+    .custom-scrollbar-dark {
+      scrollbar-width: thin;
+      scrollbar-color: rgba(75, 85, 99, 0.5) transparent;
+    }
+    
+    .custom-scrollbar-dark::-webkit-scrollbar {
+      width: 8px;
+    }
+    
+    .custom-scrollbar-dark::-webkit-scrollbar-track {
+      background: transparent;
+      border-radius: 10px;
+    }
+    
+    .custom-scrollbar-dark::-webkit-scrollbar-thumb {
+      background: rgba(75, 85, 99, 0.4);
+      border-radius: 10px;
+      border: 2px solid transparent;
+      background-clip: content-box;
+    }
+    
+    .custom-scrollbar-dark::-webkit-scrollbar-thumb:hover {
+      background: rgba(75, 85, 99, 0.6);
+      background-clip: content-box;
+    }
+    
+    /* Light theme scrollbar */
+    .custom-scrollbar-light {
+      scrollbar-width: thin;
+      scrollbar-color: rgba(209, 213, 219, 0.6) transparent;
+    }
+    
+    .custom-scrollbar-light::-webkit-scrollbar {
+      width: 8px;
+    }
+    
+    .custom-scrollbar-light::-webkit-scrollbar-track {
+      background: transparent;
+      border-radius: 10px;
+    }
+    
+    .custom-scrollbar-light::-webkit-scrollbar-thumb {
+      background: rgba(209, 213, 219, 0.5);
+      border-radius: 10px;
+      border: 2px solid transparent;
+      background-clip: content-box;
+    }
+    
+    .custom-scrollbar-light::-webkit-scrollbar-thumb:hover {
+      background: rgba(209, 213, 219, 0.7);
+      background-clip: content-box;
+    }
+  `;
 
-        return (
-          <div className={`min-h-screen px-4 py-6 ${textTone}`}>
-            {/* Search */}
-            <div ref={searchRef} className={`max-w-xl mx-auto transition-all duration-300 ${isSearchCollapsed ? 'opacity-0 -translate-y-2 pointer-events-none h-0' : 'opacity-100 translate-y-0'} ${!isSearchCollapsed && !result?.song ? 'mt-24 md:mt-36' : 'mt-2'}`}>
-              <SearchForm onSearchResults={handleSearchResults} onCollapseChange={onCollapseChange} />
+
+  // All artists (primary + features/collaborators) for display
+  const allArtists = React.useMemo(() => {
+    const song = searchResult?.song;
+    if (!song) return [];
+    if (Array.isArray(song.artists) && song.artists.length > 0) {
+      return song.artists;
+    }
+    // fallback: just primary
+    if (song.artist) return [{ name: song.artist }];
+    return [];
+  }, [searchResult]);
+
+  return (
+    <>
+      <style>{animationStyles}</style>
+      <div className={`${getTextColor()} min-h-screen flex flex-col items-stretch px-0 py-6 transition-colors duration-300 ${
+        !showIntro ? 'animate-[fadeInMain_2s_ease-out]' : ''
+      }`}>
+        {/* Search Section (collapsible) */}
+        <div
+          ref={searchContainerRef}
+          className={`w-full max-w-xl mx-auto overflow-hidden transition-all duration-300 ${
+            isSearchCollapsed ? 'opacity-0 -translate-y-2 pointer-events-none' : 'opacity-100 translate-y-0'
+          } ${!isSearchCollapsed && !(searchResult && searchResult.song) ? 'mt-24 md:mt-40' : 'mt-2'}`}
+          style={{ maxHeight: isSearchCollapsed ? 0 : 400 }}
+        >
+          <SearchForm
+            onSearchResults={handleSearchResults}
+            onCollapseChange={onCollapseChange}
+          />
+        </div>
+
+        {/* Results Section - Two-Column Layout */}
+        <div className={`w-full transition-all duration-500 ${isSearchCollapsed ? 'mt-2' : 'mt-6'}`}>
+        {searchResult && searchResult.song && (
+          <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)] items-start w-full gap-4 px-0 md:px-0">
+            {/* Left Side: Search Results */}
+            <div className={`w-full backdrop-blur-md p-8 rounded-3xl shadow-xl transition-all duration-300 animate-fade-in ${
+              theme === 'light' 
+                ? 'bg-black/20' 
+                : theme === 'medium'
+                ? 'bg-white/10'
+                : 'bg-black/40'
+            }`}>
+              {/* Album Art & Song Info */}
+              {/* Vinyl/Artist Row */}
+              <div className="flex flex-row items-start gap-8 mb-6">
+                {/* Vinyl/Album Cover - shifted left */}
+                <div className="relative group cursor-pointer flex-shrink-0" style={{ marginLeft: '-1.5rem' }} onClick={handleAlbumCoverClick}>
+                  <div className={`vinyl-record w-44 h-44 ${isPlaying ? 'vinyl-spinning' : ''}`}> 
+                    <img 
+                      src={searchResult.song.image || 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMzAwIiBoZWlnaHQ9IjMwMCIgdmlld0JveD0iMCAwIDMwMCAzMDAiIGZpbGw9Im5vbmUiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+CjxyZWN0IHdpZHRoPSIzMDAiIGhlaWdodD0iMzAwIiBmaWxsPSIjMzMzIi8+Cjx0ZXh0IHg9IjE1MCIgeT0iMTcwIiB0ZXh0LWFuY2hvcj0ibWlkZGxlIiBmaWxsPSIjNjY2IiBmb250LXNpemU9IjQ4IiBmb250LWZhbWlseT0iQXJpYWwiPuKZqjwvdGV4dD4KPC9zdmc+'} 
+                      alt="album art" 
+                      className="album-cover"
+                      style={{ pointerEvents: 'none' }}
+                      loading="eager"
+                      crossOrigin="anonymous"
+                      onLoad={(e) => {
+                        try {
+                          const col = extractDominantColor(e.target);
+                          setCoverColor(col);
+                          onCoverColorChange?.(col || null);
+                          console.log('Album cover loaded successfully:', e.target.src, col);
+                        } catch {}
+                      }}
+                      onError={(e) => {
+                        e.target.src = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMzAwIiBoZWlnaHQ9IjMwMCIgdmlld0JveD0iMCAwIDMwMCAzMDAiIGZpbGw9Im5vbmUiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+CjxyZWN0IHdpZHRoPSIzMDAiIGhlaWdodD0iMzAwIiBmaWxsPSIjMzMzIi8+Cjx0ZXh0IHg9IjE1MCIgeT0iMTcwIiB0ZXh0LWFuY2hvcj0ibWlkZGxlIiBmaWxsPSIjNjY2IiBmb250LXNpemU9IjQ4IiBmb250LWZhbWlseT0iQXJpYWwiPuKZqjwvdGV4dD4KPC9zdmc+';
+                        setCoverColor(null);
+                        onCoverColorChange?.(null);
+                      }}
+                    />
+                  </div>
+                  {/* Play/Pause Overlay */}
+                  {searchResult.song.preview_url && (
+                    <div className={`absolute inset-0 flex items-center justify-center rounded-full transition-opacity duration-300 pointer-events-none ${
+                      isPlaying ? 'opacity-0' : 'opacity-0 group-hover:opacity-100'
+                    }`}>
+                      <div className="bg-black/60 rounded-full p-4 backdrop-blur-sm">
+                        {isPlaying ? (
+                          <Pause className="w-8 h-8 text-white drop-shadow-lg" />
+                        ) : (
+                          <Play className="w-8 h-8 text-white drop-shadow-lg ml-1" />
+                        )}
+                      </div>
+                    </div>
+                  )}
+                  {/* Vinyl Grooves Effect */}
+                  <div className="absolute inset-2 rounded-full pointer-events-none" style={{
+                    background: `radial-gradient(
+                      circle at center, 
+                      transparent 15%, 
+                      rgba(255,255,255,0.02) 16%, 
+                      transparent 17%, 
+                      rgba(255,255,255,0.02) 18%, 
+                      transparent 19%, 
+                      rgba(255,255,255,0.02) 20%, 
+                      transparent 21%, 
+                      rgba(255,255,255,0.02) 22%, 
+                      transparent 23%, 
+                      rgba(255,255,255,0.02) 24%, 
+                      transparent 25%
+                    )`
+                  }}>
+                  </div>
+                </div>
+                {/* Artist List - always visible, right of vinyl */}
+                <div className="flex flex-col items-start justify-center flex-1 min-w-[120px]">
+                  <span className={`text-lg font-semibold mb-2 ${
+                    theme === 'light' ? 'text-gray-900' : 'text-indigo-200'
+                  }`}>Artists</span>
+                  <ArtistList artists={allArtists} primary={searchResult.song.artist} />
+                  {searchResult.song.album && (
+                    <div className={`text-xs mt-2 ${
+                      theme === 'light' ? 'text-gray-600' : 'text-gray-400'
+                    }`}>Album: {searchResult.song.album}</div>
+                  )}
+                </div>
+              </div>
+
+                {/* Action Buttons */}
+                <div className="flex flex-wrap gap-3 mt-4 justify-center">
+                  {/* YouTube button (direct link if available, else search) */}
+                  {searchResult.song.youtube_url ? (
+                    <a 
+                      href={searchResult.song.youtube_url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center px-5 py-3 bg-red-500 hover:bg-red-600 rounded-full transition-all duration-300 text-white font-medium shadow-lg hover:shadow-xl transform hover:scale-105"
+                    >
+                      <svg width="18" height="18" fill="currentColor" className="mr-2" viewBox="0 0 24 24">
+                        <path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/>
+                      </svg>
+                      YouTube
+                    </a>
+                  ) : (
+                    <a 
+                      href={`https://www.youtube.com/results?search_query=${encodeURIComponent(`${searchResult.song.title} ${searchResult.song.artist}`)}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center px-5 py-3 bg-red-500 hover:bg-red-600 rounded-full transition-all duration-300 text-white font-medium shadow-lg hover:shadow-xl transform hover:scale-105"
+                    >
+                      <svg width="18" height="18" fill="currentColor" className="mr-2" viewBox="0 0 24 24">
+                        <path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/>
+                      </svg>
+                      YouTube
+                    </a>
+                  )}
+
+                  {/* Spotify button (direct link if available, else search) */}
+                  {searchResult.song.spotify_url ? (
+                    <a 
+                      href={searchResult.song.spotify_url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center px-5 py-3 bg-green-500 hover:bg-green-600 rounded-full transition-all duration-300 text-white font-medium shadow-lg hover:shadow-xl transform hover:scale-105"
+                    >
+                      <svg width="18" height="18" fill="currentColor" className="mr-2" viewBox="0 0 24 24">
+                        <path d="M12 0C5.4 0 0 5.4 0 12s5.4 12 12 12 12-5.4 12-12S18.66 0 12 0zm5.521 17.34c-.24.359-.66.48-1.021.24-2.82-1.74-6.36-2.101-10.561-1.141-.418.122-.859-.179-.982-.599-.122-.421.18-.861.599-.983 4.56-1.021 8.52-.6 11.64 1.32.42.18.479.659.301 1.02v.141zm1.44-3.3c-.301.42-.841.6-1.262.3-3.239-1.98-8.159-2.58-11.939-1.38-.479.12-1.02-.12-1.14-.6-.12-.48.12-1.021.6-1.141C9.6 9.9 15 10.561 18.72 12.84c.361.181.54.78.241 1.2zm.12-3.36C15.24 8.4 8.82 8.16 5.16 9.301c-.6.179-1.2-.181-1.38-.721-.18-.601.18-1.2.72-1.381 4.26-1.3 11.28-1.02 15.721 1.621.539.3.719 1.02.42 1.56z"/>
+                      </svg>
+                      Spotify
+                    </a>
+                  ) : (
+                    <a 
+                      href={`https://open.spotify.com/search/${encodeURIComponent(`${searchResult.song.title} ${searchResult.song.artist}`)}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center px-5 py-3 bg-green-500 hover:bg-green-600 rounded-full transition-all duration-300 text-white font-medium shadow-lg hover:shadow-xl transform hover:scale-105"
+                    >
+                      <svg width="18" height="18" fill="currentColor" className="mr-2" viewBox="0 0 24 24">
+                        <path d="M12 0C5.4 0 0 5.4 0 12s5.4 12 12 12 12-5.4 12-12S18.66 0 12 0zm5.521 17.34c-.24.359-.66.48-1.021.24-2.82-1.74-6.36-2.101-10.561-1.141-.418.122-.859-.179-.982-.599-.122-.421.18-.861.599-.983 4.56-1.021 8.52-.6 11.64 1.32.42.18.479.659.301 1.02v.141zm1.44-3.3c-.301.42-.841.6-1.262.3-3.239-1.98-8.159-2.58-11.939-1.38-.479.12-1.02-.12-1.14-.6-.12-.48.12-1.021.6-1.141C9.6 9.9 15 10.561 18.72 12.84c.361.181.54.78.241 1.2zm.12-3.36C15.24 8.4 8.82 8.16 5.16 9.301c-.6.179-1.2-.181-1.38-.721-.18-.601.18-1.2.72-1.381 4.26-1.3 11.28-1.02 15.721 1.621.539.3.719 1.02.42 1.56z"/>
+                      </svg>
+                      Spotify
+                    </a>
+                  )}
+
+                  {/* Open in New Tab Button for External Links */}
+                  {(searchResult.song.external_url || searchResult.song.genius_url) && (
+                    <a 
+                      href={searchResult.song.external_url || searchResult.song.genius_url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center px-5 py-3 bg-purple-500 hover:bg-purple-600 rounded-full transition-all duration-300 text-white font-medium shadow-lg hover:shadow-xl transform hover:scale-105"
+                    >
+                      <ExternalLink className="w-4 h-4 mr-2" />
+                      View Lyrics Source
+                    </a>
+                  )}
+                </div>
+              </div>
+
+              {/* Lyrics Display */}
+              {searchResult.song.lyrics && (
+                <div 
+                  onClick={() => setIsLyricsModalOpen(true)}
+                  className={`rounded-2xl p-6 shadow-md max-h-96 overflow-y-auto transition-all duration-300 cursor-pointer hover:shadow-lg hover:scale-[1.02] mt-6 ${
+                    coverColor
+                      ? (theme === 'light' 
+                        ? 'custom-scrollbar-light' 
+                        : theme === 'medium' 
+                          ? 'custom-scrollbar' 
+                          : 'custom-scrollbar-dark')
+                      : (
+                        theme === 'light' 
+                          ? 'bg-gradient-to-br from-black/60 to-gray-800/80 hover:from-black/70 hover:to-gray-800/90 custom-scrollbar-light' 
+                          : theme === 'medium'
+                          ? 'bg-gradient-to-br from-black/50 to-indigo-900/70 hover:from-black/60 hover:to-indigo-900/80 custom-scrollbar'
+                          : 'bg-gradient-to-br from-black/60 to-indigo-900/80 hover:from-black/70 hover:to-indigo-900/90 custom-scrollbar-dark'
+                      )
+                  }`}
+                  style={coverColor ? { background: getLyricsBackground(coverColor, theme) } : undefined}
+                >
+                  <h3 className={`text-lg font-semibold mb-4 flex items-center gap-2 ${
+                    theme === 'light' ? 'text-white' : 'text-gray-100'
+                  }`}>
+                    <Music className="w-5 h-5" />
+                    Lyrics
+                  </h3>
+                  <pre className={`whitespace-pre-wrap font-mono text-lg leading-relaxed pb-3 ${
+                    theme === 'light' ? 'text-gray-100' : 'text-gray-100'
+                  }`}>
+                    {searchResult.song.lyrics}
+                  </pre>
+                </div>
+              )}
+
+              {/* Recommendations Section */}
+              {(searchResult.song.recommendations && searchResult.song.recommendations.length > 0) || isLoadingRecommendations ? (
+                <div className="mt-6">
+                  <div className={`font-semibold text-md mb-4 ${
+                    theme === 'light' ? 'text-gray-900' : 'text-indigo-200'
+                  }`}>
+                    Other Songs
+                  </div>
+                  
+      {isLoadingRecommendations ? (
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+                      {[...Array(6)].map((_, index) => (
+                        <div 
+                          key={`loading_${index}`}
+          className={`rounded-lg p-3 flex flex-col items-center transition-all duration-300 shadow-sm animate-pulse ${
+                            theme === 'light' 
+                              ? 'bg-gray-200/70' 
+                              : 'bg-gray-900/70'
+                          }`}
+                        >
+          <div className="w-14 h-14 rounded mb-1.5 bg-gray-400/50"></div>
+          <div className="h-3.5 w-24 bg-gray-400/50 rounded mb-1"></div>
+          <div className="h-3 w-20 bg-gray-400/50 rounded"></div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+                      {searchResult.song.recommendations.map((rec, index) => (
+                        <div 
+                          key={rec.id || index} 
+          className={`rounded-lg p-3 flex flex-col items-center transition-all duration-300 shadow-md hover:scale-[1.03] cursor-pointer relative ${
+                            coverColor ? '' : (
+                              theme === 'light' 
+                                ? 'bg-gray-200/70 hover:bg-gray-300/70' 
+                                : 'bg-gray-900/70 hover:bg-gray-800'
+                            )
+                          } ${isLoadingRecommendationSong ? 'pointer-events-none opacity-50' : ''}`}
+                          style={coverColor ? { background: getLyricsBackground(coverColor, theme) } : undefined}
+                          onClick={() => {
+                            if (!isLoadingRecommendationSong) {
+                              handleRecommendationClick(rec);
+                            }
+                          }}
+                          title={`Click to view lyrics for "${rec.title}" by ${rec.artist}`}
+                        >
+                          {isLoadingRecommendationSong && (
+                            <div className="absolute inset-0 flex items-center justify-center bg-black/30 rounded-xl">
+                              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-white"></div>
+                            </div>
+                          )}
+                          <img 
+                            src={rec.thumbnail || rec.image || FALLBACK_COVER} 
+                            alt="cover" 
+                            className="w-14 h-14 rounded mb-1.5 object-cover border border-indigo-300/70"
+                            loading="lazy"
+                            decoding="async"
+                            referrerPolicy="no-referrer"
+                            onError={(e) => { e.currentTarget.src = FALLBACK_COVER; }}
+                          />
+                          <div className={`text-xs font-semibold text-center line-clamp-2 ${
+                            theme === 'light' ? 'text-gray-900' : 'text-gray-100'
+                          }`}>
+                            {rec.title}
+                          </div>
+                          <div className={`text-[10px] text-center ${
+                            theme === 'light' ? 'text-gray-600' : 'text-gray-400'
+                          }`}>
+                            {rec.artist}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              ) : null}
             </div>
 
-            {result?.song && (
-              <div className="mt-6 grid gap-6 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)] items-start max-w-7xl mx-auto">
-                {/* Left Panel */}
-                <div className={`p-6 rounded-2xl shadow-lg backdrop-blur-md ${theme === 'light' ? 'bg-white/60' : theme === 'medium' ? 'bg-gray-800/60' : 'bg-black/50'}`}>
-                  <div className="flex flex-row gap-6 items-start">
-                    {/* Vinyl */}
-                    <button onClick={togglePlay} className={`relative group w-44 h-44 rounded-full flex-shrink-0 focus:outline-none focus:ring-2 focus:ring-indigo-400 transition-transform ${isPlaying ? 'animate-spin-slow' : ''}`}
-                      title={result.song.preview_url ? (isPlaying ? 'Pause preview' : 'Play preview') : 'No preview available'}>
-                      <div className="absolute inset-0 rounded-full bg-gradient-to-br from-gray-800 via-gray-900 to-black shadow-inner" />
-                      <div className="absolute inset-3 rounded-full bg-gradient-to-tr from-gray-700/40 to-gray-900/40" />
-                      <img src={result.song.image || FALLBACK_IMG} alt="cover" className="absolute inset-[22%] w-[56%] h-[56%] rounded-full object-cover shadow" onError={e=>{e.currentTarget.src=FALLBACK_IMG;}} />
-                      {result.song.preview_url && (
-                        <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition" >
-                          {isPlaying ? <Pause className="w-10 h-10 text-white drop-shadow"/> : <Play className="w-10 h-10 text-white ml-1 drop-shadow"/>}
-                        </div>
-                      )}
-                    </button>
-                    {/* Artists */}
-                    <div className="flex-1 min-w-[140px]">
-                      <h2 className="text-xl font-semibold mb-3">Artists</h2>
-                      <ArtistList artists={aggregatedArtists} primary={result.song.artist} />
-                      {result.song.album && <div className="text-xs mt-3 opacity-70">Album: {result.song.album}</div>}
-                    </div>
-                  </div>
+            )}</div>
+      </div>
 
-                  {/* Actions */}
-                  <div className="flex flex-wrap gap-3 mt-6">
-                    {result.song.youtube_url ? (
-                      <a className="btn-red" href={result.song.youtube_url} target="_blank" rel="noopener noreferrer">YouTube</a>
-                    ) : (
-                      <a className="btn-red" href={`https://www.youtube.com/results?search_query=${encodeURIComponent(result.song.title + ' ' + result.song.artist)}`} target="_blank" rel="noopener noreferrer">YouTube</a>
-                    )}
-                    {result.song.spotify_url ? (
-                      <a className="btn-green" href={result.song.spotify_url} target="_blank" rel="noopener noreferrer">Spotify</a>
-                    ) : (
-                      <a className="btn-green" href={`https://open.spotify.com/search/${encodeURIComponent(result.song.title + ' ' + result.song.artist)}`} target="_blank" rel="noopener noreferrer">Spotify</a>
-                    )}
-                    {(result.song.external_url || result.song.genius_url) && (
-                      <a className="inline-flex items-center px-4 py-2 rounded-full bg-purple-600 hover:bg-purple-700 text-white text-sm font-medium shadow" href={result.song.external_url || result.song.genius_url} target="_blank" rel="noopener noreferrer">
-                        <ExternalLink className="w-4 h-4 mr-1"/> Source
-                      </a>
-                    )}
-                  </div>
-
-                  {/* Lyrics Preview */}
-                  {result.song.lyrics && (
-                    <div className={`mt-6 p-5 rounded-xl max-h-80 overflow-y-auto cursor-pointer shadow-inner transition hover:shadow-lg ${theme==='light'?'bg-gray-900 text-gray-100':'bg-gray-800/70 text-gray-100'}`} onClick={()=>setShowLyricsModal(true)} title="Click to expand lyrics">
-                      <h3 className="flex items-center gap-2 font-semibold mb-3"><Music className="w-5 h-5"/>Lyrics</h3>
-                      <pre className="whitespace-pre-wrap text-sm leading-relaxed font-mono">{result.song.lyrics}</pre>
-                    </div>
-                  )}
-
-                  {/* Recommendations */}
-                  {(recsLoading || result.song.recommendations?.length) && (
-                    <div className="mt-8">
-                      <h4 className="font-semibold mb-3">Other Songs</h4>
-                      {recsLoading ? (
-                        <div className="grid gap-4 grid-cols-2 md:grid-cols-3">{Array.from({length:6}).map((_,i)=>(<div key={i} className="h-28 rounded-lg bg-gray-600/20 animate-pulse"/>))}</div>
-                      ) : (
-                        <div className="grid gap-4 grid-cols-2 md:grid-cols-3">
-                          {result.song.recommendations.map(r => (
-                            <button key={r.id} onClick={()=>!recSongLoading && handleRecClick(r)} className={`group relative p-3 rounded-lg text-left bg-gray-700/30 hover:bg-gray-700/50 transition shadow ${recSongLoading?'opacity-60 pointer-events-none':''}`} title={`View lyrics: ${r.title} – ${r.artist}`}>
-                              <img src={r.thumbnail || FALLBACK_IMG} alt={r.title} className="w-14 h-14 rounded object-cover mb-2 mx-auto" onError={e=>{e.currentTarget.src=FALLBACK_IMG;}} />
-                              <div className="text-xs font-semibold truncate">{r.title}</div>
-                              <div className="text-[10px] opacity-70 truncate">{r.artist}</div>
-                            </button>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  )}
+      {/* Lyrics Modal */}
+      {isLyricsModalOpen && searchResult?.song?.lyrics && (
+        <div 
+          className="fixed inset-0 z-50 flex items-center justify-center p-4"
+          onClick={() => setIsLyricsModalOpen(false)}
+        >
+          {/* Blurred Background Overlay */}
+          <div className="absolute inset-0 bg-black/50 backdrop-blur-md"></div>
+          
+          {/* Modal Content */}
+          <div 
+            className={`relative w-full max-w-4xl max-h-[90vh] rounded-3xl shadow-2xl overflow-hidden ${
+              theme === 'light' 
+                ? 'bg-gradient-to-br from-white to-gray-100' 
+                : theme === 'medium'
+                ? 'bg-gradient-to-br from-gray-800 to-gray-900'
+                : 'bg-gradient-to-br from-gray-900 to-black'
+            }`}
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Header */}
+            <div className={`p-6 border-b ${
+              theme === 'light' ? 'border-gray-200' : 'border-gray-700'
+            }`}>
+              <div className="flex items-center justify-between">
+                <div>
+                  <h2 className={`text-2xl font-bold ${
+                    theme === 'light' ? 'text-gray-900' : 'text-white'
+                  }`}>
+                    {searchResult.song.title}
+                  </h2>
+                  <p className={`text-lg ${
+                    theme === 'light' ? 'text-gray-600' : 'text-gray-400'
+                  }`}>
+                    by {searchResult.song.artist}
+                  </p>
                 </div>
-
-                {/* Right Panel (placeholder for future artist bio etc.) */}
-                <div className="hidden lg:block opacity-60 text-sm">
-                  <p>Select a recommendation to explore more tracks and lyrics.</p>
-                </div>
+                <button
+                  onClick={() => setIsLyricsModalOpen(false)}
+                  className={`p-2 rounded-full transition-colors ${
+                    theme === 'light' 
+                      ? 'hover:bg-gray-200 text-gray-600' 
+                      : 'hover:bg-gray-700 text-gray-400'
+                  }`}
+                >
+                  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
               </div>
-            )}
-
-            {/* Modal */}
-            {showLyricsModal && result?.song?.lyrics && (
-              <div className="fixed inset-0 z-40 flex items-center justify-center p-4" onClick={()=>setShowLyricsModal(false)}>
-                <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" />
-                <div className={`relative max-w-3xl w-full max-h-[90vh] rounded-2xl overflow-hidden shadow-2xl ${theme==='light'?'bg-white':'bg-gray-900'}`} onClick={e=>e.stopPropagation()}>
-                  <div className="flex items-center justify-between px-5 py-4 border-b border-gray-600/30">
-                    <div>
-                      <h2 className="text-xl font-bold">{result.song.title}</h2>
-                      <p className="text-sm opacity-70">{aggregatedArtists.map(a=>a.name).join(', ')}</p>
-                    </div>
-                    <button onClick={()=>setShowLyricsModal(false)} className="p-2 rounded hover:bg-gray-600/30" aria-label="Close lyrics">✕</button>
-                  </div>
-                  <div className="p-5 overflow-y-auto max-h-[calc(90vh-120px)] text-sm leading-relaxed font-mono whitespace-pre-wrap">
-                    {result.song.lyrics}
-                  </div>
-                </div>
-              </div>
-            )}
+            </div>
+            
+            {/* Lyrics Content */}
+            <div className={`p-6 overflow-y-auto max-h-[calc(90vh-120px)] ${
+              theme === 'light' 
+                ? 'custom-scrollbar-light' 
+                : theme === 'medium'
+                ? 'custom-scrollbar'
+                : 'custom-scrollbar-dark'
+            }`}>
+              <pre className={`whitespace-pre-wrap font-mono text-lg leading-relaxed ${
+                theme === 'light' ? 'text-gray-800' : 'text-gray-200'
+              }`}>
+                {searchResult.song.lyrics}
+              </pre>
+            </div>
           </div>
-        );
-      };
+        </div>
+      )}
 
-      export default Home;
-                image: previewData.cover || searchResult.song.image,
+      {/* Intro Animation Overlay */}
+      {showIntro && (
+        <div
+          className={`fixed inset-0 flex flex-col items-center justify-center bg-black text-white transition-opacity duration-500 z-50 ${
+            fadeOut ? 'opacity-0' : 'opacity-100'
+          }`}
+        >
+          <div className="relative flex items-center justify-center mb-8">
+            {/* Animated music notes */}
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              className={`h-12 w-12 absolute -left-16 transition-all duration-700 ${
+                step >= 1 ? 'opacity-100 -translate-y-2' : 'opacity-0 translate-y-4'
+              }`}
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3"
+              />
+            </svg>
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              className={`h-12 w-12 absolute -right-16 transition-all duration-700 ${
+                step >= 2 ? 'opacity-100 translate-y-2' : 'opacity-0 -translate-y-4'
+              }`}
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3"
+              />
+            </svg>
+            
+            {/* Main title */}
+            <div className="flex items-baseline">
+              <h1
+                className={`text-6xl md:text-8xl font-bold transition-all duration-700 bg-gradient-to-r from-blue-400 via-purple-400 to-pink-400 bg-clip-text text-transparent ${
+                  showLyric ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4'
+                }`}
+                style={{ fontFamily: "'Poppins', sans-serif" }}
+              >
+                Lyric
+              </h1>
+              <h1
+                className={`text-6xl md:text-8xl font-bold bg-gradient-to-r from-yellow-400 via-orange-400 to-red-400 bg-clip-text text-transparent transition-all duration-700 ${
+                  showFinder ? 'opacity-100 translate-y-0' : 'opacity-0 -translate-y-4'
+                }`}
+                style={{ fontFamily: "'Poppins', sans-serif" }}
+              >
+                Finder
+              </h1>
+            </div>
+          </div>
+
+          {/* Tagline */}
+          <p
+            className={`text-xl md:text-2xl text-gray-300 transition-all duration-700 ${
+              showTagline ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4'
+            }`}
+          >
+            Discover the words behind the music
+          </p>
+
+          {/* Animated equalizer effect at the bottom */}
+          <div className="absolute bottom-10 left-0 right-0 flex justify-center space-x-1 h-12 items-end">
+            {[1, 2, 3, 4, 5, 6, 7, 8].map((bar) => (
+              <div
+                key={bar}
+                className="w-2 bg-yellow-300 rounded-t-sm"
+                style={{
+                  height: `${Math.random() * 40 + 10}px`,
+                  animation: `equalize 300ms infinite alternate ${bar * 100}ms`,
+                }}
+              />
+            ))}
+          </div>
+        </div>
+      )}
+    </>
+  );
+};
+
+export default Home;

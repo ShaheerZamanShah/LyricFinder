@@ -120,7 +120,7 @@ const useSpotify = () => {
       if (artistName) {
         params.append('artist_name', artistName);
       }
-      params.append('limit', '6');
+  params.append('limit', '10');
 
       const response = await fetch(`${API_ENDPOINTS.SPOTIFY_RECOMMENDATIONS}?${params}`, {
         headers: {

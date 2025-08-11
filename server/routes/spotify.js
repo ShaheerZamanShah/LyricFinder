@@ -165,59 +165,125 @@ router.get('/search-auth', async (req, res) => {
 // Get Spotify recommendations based on a track (alternative approach using search)
 router.get('/recommendations', async (req, res) => {
   try {
-    const { track_id, artist_name, limit = 6 } = req.query;
+    const { track_id, artist_name, limit = 10 } = req.query;
     const accessToken = req.headers.authorization?.replace('Bearer ', '');
-    
+
     console.log('Recommendations request:', { track_id, artist_name, limit, hasToken: !!accessToken });
-    
+
     if (!accessToken) {
       return res.status(401).json({ error: 'Access token required' });
     }
 
+    const headers = { headers: { Authorization: `Bearer ${accessToken}` } };
+
+    // 1) Prefer Spotify's official recommendations API when we have a seed track
+    if (track_id) {
+      try {
+        // Fetch track to derive primary artist ID (optional but improves similarity)
+        let seedArtists = [];
+        try {
+          const trackResp = await axios.get(`https://api.spotify.com/v1/tracks/${encodeURIComponent(track_id)}`, headers);
+          const artistId = trackResp.data?.artists?.[0]?.id;
+          if (artistId) seedArtists.push(artistId);
+        } catch (e) {
+          console.warn('Could not fetch track for artist seeds, continuing with track seed only');
+        }
+
+        const params = new URLSearchParams();
+        params.set('seed_tracks', track_id);
+        if (seedArtists.length > 0) params.set('seed_artists', seedArtists.slice(0, 2).join(','));
+        params.set('limit', String(parseInt(limit)));
+        params.set('market', 'US');
+
+        const recResp = await axios.get(`https://api.spotify.com/v1/recommendations?${params.toString()}`, headers);
+        const tracks = recResp.data?.tracks || [];
+
+        const recommendations = tracks.map(track => ({
+          id: track.id,
+          title: track.name,
+          artist: track.artists[0]?.name || 'Unknown Artist',
+          artists: (track.artists || []).map(a => ({ id: a.id, name: a.name, spotify_url: a.external_urls?.spotify })),
+          album: track.album?.name || 'Unknown Album',
+          image: track.album?.images?.[0]?.url || null,
+          preview_url: track.preview_url,
+          external_url: track.external_urls?.spotify,
+          duration_ms: track.duration_ms,
+          popularity: track.popularity,
+          spotify_id: track.id
+        }));
+
+        console.log('Recommendations (seeded by track):', recommendations.map(r => `${r.title} by ${r.artist}`));
+        return res.json({ recommendations });
+      } catch (seedErr) {
+        console.error('Seeded recommendations failed, will fallback to search-based:', seedErr.response?.data || seedErr.message);
+      }
+    }
+
+    // 2) Fallback path: derive from artist name via search, then use recommendations API with artist seed
     let searchQueries = [];
-    
     if (artist_name && artist_name.trim()) {
-      // Create diverse search queries based on the artist
+      try {
+        const artistSearch = await axios.get(
+          `https://api.spotify.com/v1/search?q=${encodeURIComponent(artist_name.trim())}&type=artist&limit=1&market=US`,
+          headers
+        );
+        const artistId = artistSearch.data?.artists?.items?.[0]?.id;
+        if (artistId) {
+          const params = new URLSearchParams();
+          params.set('seed_artists', artistId);
+          params.set('limit', String(parseInt(limit)));
+          params.set('market', 'US');
+          const recResp = await axios.get(`https://api.spotify.com/v1/recommendations?${params.toString()}`, headers);
+          const tracks = recResp.data?.tracks || [];
+          const recommendations = tracks.map(track => ({
+            id: track.id,
+            title: track.name,
+            artist: track.artists[0]?.name || 'Unknown Artist',
+            artists: (track.artists || []).map(a => ({ id: a.id, name: a.name, spotify_url: a.external_urls?.spotify })),
+            album: track.album?.name || 'Unknown Album',
+            image: track.album?.images?.[0]?.url || null,
+            preview_url: track.preview_url,
+            external_url: track.external_urls?.spotify,
+            duration_ms: track.duration_ms,
+            popularity: track.popularity,
+            spotify_id: track.id
+          }));
+          console.log('Recommendations (seeded by artist):', recommendations.map(r => `${r.title} by ${r.artist}`));
+          return res.json({ recommendations });
+        }
+      } catch (e) {
+        console.warn('Artist-seeded recommendations failed, will fallback to heuristic search:', e.response?.data || e.message);
+      }
+      // If we got here, continue to heuristic search below
+    } else {
+      // default broad queries
+      searchQueries = [
+        'year:2024 genre:pop',
+        'year:2023-2024 genre:rock',
+        'year:2022-2024 genre:indie'
+      ];
+    }
+
+    // 3) Legacy heuristic fallback using search if seeds fail
+    if (!searchQueries.length && artist_name) {
       const genres = ['pop', 'rock', 'indie', 'alternative', 'electronic', 'hip-hop', 'r&b', 'jazz', 'country'];
       const randomGenres = genres.sort(() => 0.5 - Math.random()).slice(0, 3);
-      
-      // Add artist-related searches and genre-based searches
       searchQueries = [
         `artist:${artist_name.trim()}`,
         `genre:${randomGenres[0]}`,
         `genre:${randomGenres[1]}`,
-        `year:2020-2024`, // Recent popular tracks
-        `genre:${randomGenres[2]}`,
-        'playlist:"Top 50"' // Popular playlists
-      ];
-    } else {
-      // Default searches for variety
-      searchQueries = [
-        'year:2023-2024 genre:pop',
-        'year:2022-2024 genre:rock',
-        'year:2021-2024 genre:indie',
-        'playlist:"Top 50"',
-        'genre:electronic',
-        'genre:alternative'
+        `year:2020-2025`,
+        `genre:${randomGenres[2]}`
       ];
     }
 
-    console.log('Search queries:', searchQueries);
-
     const allTracks = [];
-    
-    // Execute multiple searches to get variety
-    for (const query of searchQueries.slice(0, 3)) { // Limit to 3 searches to avoid rate limits
+    for (const query of searchQueries.slice(0, 3)) {
       try {
         const response = await axios.get(
           `https://api.spotify.com/v1/search?q=${encodeURIComponent(query)}&type=track&limit=10&market=US`,
-          {
-            headers: {
-              'Authorization': `Bearer ${accessToken}`
-            }
-          }
+          headers
         );
-
         if (response.data.tracks.items.length > 0) {
           allTracks.push(...response.data.tracks.items);
         }
@@ -226,36 +292,22 @@ router.get('/recommendations', async (req, res) => {
       }
     }
 
-    console.log(`Collected ${allTracks.length} tracks from searches`);
-
     if (allTracks.length === 0) {
       return res.status(404).json({ error: 'No recommendations found' });
     }
 
-    // Remove duplicates and shuffle
     const uniqueTracks = [];
     const seenIds = new Set();
-    
     for (const track of allTracks) {
-      if (!seenIds.has(track.id)) {
-        uniqueTracks.push(track);
-        seenIds.add(track.id);
-      }
+      if (!seenIds.has(track.id)) { uniqueTracks.push(track); seenIds.add(track.id); }
     }
 
-    // Shuffle and take random selection
-    const shuffled = uniqueTracks.sort(() => 0.5 - Math.random());
-    const selectedTracks = shuffled.slice(0, parseInt(limit));
-
+    const selectedTracks = uniqueTracks.slice(0, parseInt(limit));
     const recommendations = selectedTracks.map(track => ({
       id: track.id,
       title: track.name,
       artist: track.artists[0]?.name || 'Unknown Artist',
-      artists: (track.artists || []).map(a => ({
-        id: a.id,
-        name: a.name,
-        spotify_url: a.external_urls?.spotify
-      })),
+      artists: (track.artists || []).map(a => ({ id: a.id, name: a.name, spotify_url: a.external_urls?.spotify })),
       album: track.album?.name || 'Unknown Album',
       image: track.album?.images[0]?.url || null,
       preview_url: track.preview_url,
@@ -265,8 +317,7 @@ router.get('/recommendations', async (req, res) => {
       spotify_id: track.id
     }));
 
-    console.log('Final recommendations:', recommendations.map(r => `${r.title} by ${r.artist}`));
-
+    console.log('Recommendations (fallback):', recommendations.map(r => `${r.title} by ${r.artist}`));
     res.json({ recommendations });
 
   } catch (error) {
