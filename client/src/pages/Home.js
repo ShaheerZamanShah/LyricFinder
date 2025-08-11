@@ -1141,7 +1141,12 @@ const Home = ({ searchResult: externalResult, onSearchResults, onCollapseChange,
 
               {/* Genius Song Details (below lyrics, above recommendations) */}
               {searchResult?.song?.title && (
-                <SongDetails title={searchResult.song.title} artist={searchResult.song.artist} theme={theme} />
+                <SongDetails
+                  title={searchResult.song.title}
+                  artist={searchResult.song.artist}
+                  theme={theme}
+                  coverColor={coverColor}
+                />
               )}
 
               {/* Recommendations Section */}
@@ -1150,7 +1155,7 @@ const Home = ({ searchResult: externalResult, onSearchResults, onCollapseChange,
                   <div className={`font-semibold text-md mb-4 ${
                     theme === 'light' ? 'text-gray-900' : 'text-indigo-200'
                   }`}>
-                    Other Songs
+                    More Songs
                   </div>
                   
                   {isLoadingRecommendations ? (

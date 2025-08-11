@@ -2,10 +2,25 @@ import React, { useEffect, useState } from 'react';
 import { ExternalLink } from 'lucide-react';
 import { API_ENDPOINTS } from '../config/api';
 
-const SongDetails = ({ title, artist, theme }) => {
+const SongDetails = ({ title, artist, theme, coverColor }) => {
   const [details, setDetails] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+
+  // Match Home.js gradient style for dynamic backgrounds
+  const clamp = (v) => Math.max(0, Math.min(255, v));
+  const adjustColor = ({ r, g, b }, factor = 0.8) => ({
+    r: clamp(Math.round(r * factor)),
+    g: clamp(Math.round(g * factor)),
+    b: clamp(Math.round(b * factor)),
+  });
+  const rgba = ({ r, g, b }, a) => `rgba(${r}, ${g}, ${b}, ${a})`;
+  const getLyricsBackground = (color, th) => {
+    const darken = adjustColor(color, 0.65);
+    const a1 = th === 'light' ? 0.85 : 0.7;
+    const a2 = th === 'light' ? 0.95 : 0.85;
+    return `linear-gradient(135deg, ${rgba(color, a1)} 0%, ${rgba(darken, a2)} 100%)`;
+  };
 
   useEffect(() => {
     let active = true;
@@ -47,7 +62,12 @@ const SongDetails = ({ title, artist, theme }) => {
   if (error || !details) return null;
 
   return (
-    <div className={`rounded-2xl p-5 shadow-md mt-4 ${theme==='light' ? 'bg-white/70' : 'bg-black/40'}`}>
+    <div
+      className={`rounded-2xl p-5 shadow-md mt-4 ${
+        theme === 'light' ? 'bg-white/70' : 'bg-black/40'
+      }`}
+      style={coverColor ? { background: getLyricsBackground(coverColor, theme) } : undefined}
+    >
       <div className="flex items-start gap-4">
         {details.image && (
           <img src={details.image} alt={details.title} className="w-16 h-16 rounded object-cover shadow" loading="lazy" />
