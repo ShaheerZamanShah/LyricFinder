@@ -49,7 +49,7 @@ const cleanAndFormatLyrics = (rawLyrics) => {
 const searchLyricsWithGenius = async (songTitle, artist) => {
   try {
     // Step 1: Search for the song on Genius with timeout
-    const searchQuery = `${songTitle} ${artist}`;
+    const searchQuery = artist ? `${songTitle} ${artist}` : songTitle;
     const searchResponse = await axios.get(`${GENIUS_API_BASE_URL}/search`, {
       headers: {
         'Authorization': `Bearer ${GENIUS_ACCESS_TOKEN}`
@@ -171,9 +171,7 @@ This could be due to:
 Please try:
 • Checking the song title and artist spelling
 • Searching for a different version or remix
-• Trying again in a few minutes
-
-Note: To get better results, please add a valid Genius API key to your environment variables.`,
+• Trying again in a few minutes`,
       source: 'System Message',
       confidence: 0.0
     };
@@ -183,9 +181,22 @@ Note: To get better results, please add a valid Genius API key to your environme
 // POST /api/lyrics/search - Search for lyrics using Genius API
 router.post('/search', async (req, res) => {
   try {
-    const { title, artist } = req.body;
+    let { title, artist, query } = req.body;
 
-    if (!title || !artist) {
+    // If no title/artist but query is provided, try to parse it
+    if (!title && !artist && query) {
+      if (query.includes(' - ')) {
+        [artist, title] = query.split(' - ').map(s => s.trim());
+      } else if (query.includes(' by ')) {
+        [title, artist] = query.split(' by ').map(s => s.trim());
+      } else {
+        // Use query as title and leave artist empty
+        title = query.trim();
+        artist = '';
+      }
+    }
+
+    if (!title) {
       return res.status(400).json({ message: 'Title and artist are required' });
     }
 

@@ -20,7 +20,7 @@ export const ThemeProvider = ({ children }) => {
   useEffect(() => {
     // Save to localStorage whenever theme changes
     localStorage.setItem('theme', theme);
-    
+
     // Update document class for global styling
     document.documentElement.classList.remove('light', 'medium', 'dark');
     document.documentElement.classList.add(theme);
@@ -40,12 +40,12 @@ export const ThemeProvider = ({ children }) => {
   const isLightMode = theme === 'light';
 
   return (
-    <ThemeContext.Provider value={{ 
-      theme, 
-      toggleTheme, 
-      isDarkMode, 
-      isMediumMode, 
-      isLightMode 
+    <ThemeContext.Provider value={{
+      theme,
+      toggleTheme,
+      isDarkMode,
+      isMediumMode,
+      isLightMode
     }}>
       {children}
     </ThemeContext.Provider>

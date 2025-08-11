@@ -7,6 +7,47 @@ const SpotifyCallback = () => {
   const navigate = useNavigate();
   const { theme } = useTheme();
 
+  const getDarkVeilProps = () => {
+    switch (theme) {
+      case 'light':
+        return {
+          hueShift: 180,
+          noiseIntensity: 0.02,
+          scanlineIntensity: 0.1,
+          speed: 0.3,
+          scanlineFrequency: 0.5,
+          warpAmount: 0.1,
+        };
+      case 'medium':
+        return {
+          hueShift: 270,
+          noiseIntensity: 0.05,
+          scanlineIntensity: 0.15,
+          speed: 0.5,
+          scanlineFrequency: 1.0,
+          warpAmount: 0.2,
+        };
+      case 'dark':
+        return {
+          hueShift: 0,
+          noiseIntensity: 0.08,
+          scanlineIntensity: 0.2,
+          speed: 0.7,
+          scanlineFrequency: 1.5,
+          warpAmount: 0.3,
+        };
+      default:
+        return {
+          hueShift: 180,
+          noiseIntensity: 0.02,
+          scanlineIntensity: 0.1,
+          speed: 0.3,
+          scanlineFrequency: 0.5,
+          warpAmount: 0.1,
+        };
+    }
+  };
+
   const getTextColor = () => {
     switch (theme) {
       case 'light': return 'text-gray-900';
@@ -57,7 +98,7 @@ const SpotifyCallback = () => {
     <div className="flex justify-center items-center h-screen relative">
       {/* Iridescence Background */}
       <div className="fixed inset-0 z-0">
-        <DarkVeil />
+        <DarkVeil {...getDarkVeilProps()} />
       </div>
       
       {/* Content */}

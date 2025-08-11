@@ -1,9 +1,9 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
-import { Music, Moon, Sun, Sunset } from 'lucide-react';
+import { Music, Moon, Sun, Sunset, Search } from 'lucide-react';
 import { useTheme } from '../contexts/ThemeContext';
 
-const Header = () => {
+const Header = ({ isSearchCollapsed, onCollapseChange }) => {
   const { theme, toggleTheme } = useTheme();
 
   const getThemeIcon = () => {
@@ -15,16 +15,28 @@ const Header = () => {
     }
   };
 
-  
-
   return (
-    <header className="bg-black/20 backdrop-blur-md border-b border-white/20 px-8 py-4 shadow-lg">
-      <div className="max-w-6xl mx-auto flex justify-between items-center">
-        <Link to="/" className="flex items-center gap-2 text-white text-2xl font-bold no-underline drop-shadow-lg">
-          <Music size={32} />
-          LyricFinder
-        </Link>
-        
+    <header className="bg-black/20 backdrop-blur-md border-b border-white/20 px-4 md:px-6 py-4 shadow-lg sticky top-0 z-30">
+      <div className="flex justify-between items-center">
+        <div className="flex items-center gap-3">
+          <Link to="/" className="flex items-center gap-2 text-white text-2xl font-bold no-underline drop-shadow-lg">
+            <Music size={32} />
+            LyricFinder
+          </Link>
+
+          {/* Search icon appears when the main search is collapsed */}
+          {isSearchCollapsed && (
+            <button
+              onClick={() => onCollapseChange?.(false)}
+              className="ml-3 flex items-center justify-center w-9 h-9 rounded-full bg-white/15 hover:bg-white/25 text-white border border-white/20 transition-all"
+              aria-label="Open search"
+              title="Open search"
+            >
+              <Search size={18} />
+            </button>
+          )}
+        </div>
+
         {/* Theme Toggle */}
         <button
           onClick={toggleTheme}
@@ -32,8 +44,7 @@ const Header = () => {
           aria-label="Toggle theme"
         >
           {getThemeIcon()}
-          <span className="text-sm font-medium">
-          </span>
+          <span className="text-sm font-medium"></span>
         </button>
       </div>
     </header>

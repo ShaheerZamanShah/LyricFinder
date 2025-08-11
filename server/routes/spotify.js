@@ -23,8 +23,7 @@ router.post('/token', async (req, res) => {
         headers: {
           'Authorization': `Basic ${credentials}`,
           'Content-Type': 'application/x-www-form-urlencoded'
-        },
-        timeout: 5000 // 5 second timeout for token requests
+        }
       }
     );
 
@@ -43,8 +42,71 @@ router.post('/token', async (req, res) => {
   }
 });
 
-// Search Spotify tracks
+// Search Spotify tracks (simplified endpoint with built-in auth)
 router.get('/search', async (req, res) => {
+  try {
+    const { q, limit = 10 } = req.query;
+    
+    if (!q) {
+      return res.status(400).json({ error: 'Search query required' });
+    }
+
+    // Use your Spotify credentials directly
+    const clientId = process.env.SPOTIFY_CLIENT_ID || '9124e833ec0b41559b46312aaed4c3c5';
+    const clientSecret = process.env.SPOTIFY_CLIENT_SECRET || '8ffcfa2be23245b69b5660954b756d9e';
+    
+    // Get access token
+    const credentials = Buffer.from(`${clientId}:${clientSecret}`).toString('base64');
+    
+    const tokenResponse = await axios.post(
+      'https://accounts.spotify.com/api/token',
+      'grant_type=client_credentials',
+      {
+        headers: {
+          'Authorization': `Basic ${credentials}`,
+          'Content-Type': 'application/x-www-form-urlencoded'
+        }
+      }
+    );
+
+    const accessToken = tokenResponse.data.access_token;
+
+    // Search tracks
+    const response = await axios.get(
+      `https://api.spotify.com/v1/search?q=${encodeURIComponent(q)}&type=track&limit=${limit}`,
+      {
+        headers: {
+          'Authorization': `Bearer ${accessToken}`
+        }
+      }
+    );
+
+    const tracks = response.data.tracks.items.map(track => ({
+      id: track.id,
+      title: track.name,
+      artist: track.artists[0]?.name || 'Unknown Artist',
+      album: track.album?.name || 'Unknown Album',
+      image: track.album?.images[0]?.url || null,
+      preview_url: track.preview_url,
+      external_url: track.external_urls?.spotify,
+      duration_ms: track.duration_ms,
+      popularity: track.popularity,
+      spotify_id: track.id
+    }));
+
+    res.json({ tracks });
+
+  } catch (error) {
+    console.error('Spotify search error:', error.response?.data || error.message);
+    res.status(500).json({ 
+      error: 'Failed to search Spotify',
+      details: error.response?.data || error.message
+    });
+  }
+});
+
+// Search Spotify tracks (original endpoint)
+router.get('/search-auth', async (req, res) => {
   try {
     const { q, limit = 10 } = req.query;
     const accessToken = req.headers.authorization?.replace('Bearer ', '');
@@ -62,8 +124,7 @@ router.get('/search', async (req, res) => {
       {
         headers: {
           'Authorization': `Bearer ${accessToken}`
-        },
-        timeout: 5000 // 5 second timeout for search requests
+        }
       }
     );
 
@@ -143,8 +204,7 @@ router.get('/recommendations', async (req, res) => {
           {
             headers: {
               'Authorization': `Bearer ${accessToken}`
-            },
-            timeout: 3000 // 3 second timeout for recommendation searches
+            }
           }
         );
 
@@ -282,21 +342,19 @@ async function getSpotifyPreview(query) {
         headers: {
           'Authorization': `Basic ${credentials}`,
           'Content-Type': 'application/x-www-form-urlencoded'
-        },
-        timeout: 5000 // 5 second timeout for token requests
+        }
       }
     );
 
     const accessToken = tokenResponse.data.access_token;
 
-    // Search for track with timeout
+    // Search for track
     const searchResponse = await axios.get(
       `https://api.spotify.com/v1/search?q=${encodeURIComponent(query)}&type=track&limit=1`,
       {
         headers: {
           'Authorization': `Bearer ${accessToken}`
-        },
-        timeout: 3000 // 3 second timeout
+        }
       }
     );
 
@@ -325,8 +383,7 @@ async function getDeezerPreview(query) {
       {
         headers: {
           'User-Agent': 'LyricFinder/1.0'
-        },
-        timeout: 3000 // 3 second timeout for Deezer
+        }
       }
     );
 
@@ -355,8 +412,7 @@ async function getItunesPreview(query) {
       {
         headers: {
           'User-Agent': 'LyricFinder/1.0'
-        },
-        timeout: 3000 // 3 second timeout for iTunes
+        }
       }
     );
 
@@ -393,7 +449,7 @@ router.get('/artist/:artistName', async (req, res) => {
 
     const credentials = Buffer.from(`${clientId}:${clientSecret}`).toString('base64');
     
-    // Get access token with timeout
+    // Get access token
     const tokenResponse = await axios.post(
       'https://accounts.spotify.com/api/token',
       'grant_type=client_credentials',
@@ -401,21 +457,19 @@ router.get('/artist/:artistName', async (req, res) => {
         headers: {
           'Authorization': `Basic ${credentials}`,
           'Content-Type': 'application/x-www-form-urlencoded'
-        },
-        timeout: 5000 // 5 second timeout for token requests
+        }
       }
     );
 
     const accessToken = tokenResponse.data.access_token;
 
-    // Search for artist with timeout
+    // Search for artist
     const searchResponse = await axios.get(
       `https://api.spotify.com/v1/search?q=${encodeURIComponent(artistName)}&type=artist&limit=1`,
       {
         headers: {
           'Authorization': `Bearer ${accessToken}`
-        },
-        timeout: 3000 // 3 second timeout
+        }
       }
     );
 

@@ -14,6 +14,7 @@ export const API_BASE_URL = currentConfig.BASE_URL;
 export const API_ENDPOINTS = {
   SEARCH_LYRICS: `${API_BASE_URL}/api/lyrics/search`,
   SPOTIFY_PREVIEW: `${API_BASE_URL}/api/spotify/preview`,
+  SPOTIFY_SEARCH: `${API_BASE_URL}/api/spotify/search`,
   POPULAR_LYRICS: `${API_BASE_URL}/api/lyrics/popular`,
   SONGS: `${API_BASE_URL}/api/songs`,
   LASTFM_ARTIST: `${API_BASE_URL}/api/lastfm/artist`,

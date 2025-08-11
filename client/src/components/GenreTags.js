@@ -1,13 +1,13 @@
 import React from 'react';
 import { useTheme } from '../contexts/ThemeContext';
 
-export default function GenreTags({ tags }) {
+export default function GenreTags({ tags, compact = false }) {
   const { theme } = useTheme();
   
   if (!tags || tags.length === 0) return null;
   
   return (
-    <div className="mt-6">
+    <div className={compact ? 'mt-2' : 'mt-6'}>
       <h3 className={`text-lg font-semibold mb-2 transition-colors ${
         theme === 'light' ? 'text-gray-900' : 'text-white'
       }`}>

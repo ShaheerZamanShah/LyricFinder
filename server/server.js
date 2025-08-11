@@ -5,7 +5,11 @@ const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
 require('dotenv').config();
 
-const app = express();
+const app = express(); // create app first
+
+// Tell Express to trust Railway's reverse proxy
+app.set('trust proxy', 1);
+
 const PORT = process.env.PORT || 5000;
 
 // Middleware
@@ -16,17 +20,17 @@ app.use(express.json());
 // Rate limiting
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 100 // limit each IP to 100 requests per windowMs
+  max: 100 // limit each IP to 100 requests per window
 });
 app.use(limiter);
 
 // MongoDB connection
 mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/lyricfinder')
-.then(() => console.log('MongoDB connected'))
-.catch(err => {
-  console.log('MongoDB connection error:', err.message);
-  console.log('Note: The app will still work, but lyrics won\'t be cached');
-});
+  .then(() => console.log('MongoDB connected'))
+  .catch(err => {
+    console.log('MongoDB connection error:', err.message);
+    console.log('Note: The app will still work, but lyrics won\'t be cached');
+  });
 
 // Routes
 app.use('/api/songs', require('./routes/songs'));

@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useTheme } from '../contexts/ThemeContext';
 import { Music } from 'lucide-react';
 
-export default function ArtistBio({ name, bio, image }) {
+export default function ArtistBio({ name, bio, image, coverColor = null }) {
   const { theme } = useTheme();
   const [imageError, setImageError] = useState(false);
   
@@ -10,8 +10,13 @@ export default function ArtistBio({ name, bio, image }) {
     name, 
     bio: bio?.substring(0, 50), 
     image,
-    hasValidImage: !!image
+    hasValidImage: !!image,
+    coverColor
   });
+  
+  const rgba = (c, a) => `rgba(${c.r}, ${c.g}, ${c.b}, ${a})`;
+  const adjust = (c, f) => ({ r: Math.max(0, Math.min(255, Math.round(c.r * f))), g: Math.max(0, Math.min(255, Math.round(c.g * f))), b: Math.max(0, Math.min(255, Math.round(c.b * f))) });
+  const coverBg = coverColor ? { background: `linear-gradient(135deg, ${rgba(coverColor, theme === 'light' ? 0.85 : 0.7)} 0%, ${rgba(adjust(coverColor, 0.65), theme === 'light' ? 0.95 : 0.85)} 100%)` } : undefined;
   
   // Check if image is a Last.fm placeholder (keep this for Last.fm images only)
   const isPlaceholderImage = (imageUrl) => {
@@ -31,12 +36,14 @@ export default function ArtistBio({ name, bio, image }) {
   
   return (
     <div className={`p-6 rounded-xl shadow-lg border backdrop-blur-md transition-all duration-300 ${
-      theme === 'light'
+      coverColor
+        ? ''
+        : theme === 'light'
         ? 'bg-white/95 border-gray-200 shadow-gray-300/30'
         : theme === 'medium'
         ? 'bg-gray-700/95 border-gray-600 shadow-black/30'
         : 'bg-gray-800/95 border-gray-700 shadow-black/50'
-    }`}>
+    }`} style={coverBg}>
       <div className="flex items-center space-x-4">
         {showFallback ? (
           <div className={`w-24 h-24 rounded-full flex items-center justify-center border-2 transition-all duration-300 ${

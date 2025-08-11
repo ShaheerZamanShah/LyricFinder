@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import SearchForm from '../components/SearchForm';
 import ArtistSection from '../components/ArtistSection';
 import { Music, Play, Pause, ExternalLink } from 'lucide-react';
@@ -6,13 +6,12 @@ import { useTheme } from '../contexts/ThemeContext';
 import useSpotify from '../hooks/useSpotify';
 import { API_ENDPOINTS } from '../config/api';
 
-const Home = () => {
-  const [searchResult, setSearchResult] = useState(null);
+const Home = ({ searchResult: externalResult, onSearchResults, onCollapseChange, isSearchCollapsed, onCoverColorChange }) => {
+  const [searchResult, setSearchResult] = useState(externalResult || null);
   const [isLoadingRecommendations, setIsLoadingRecommendations] = useState(false);
   const [isPlaying, setIsPlaying] = useState(false);
   const [audioRef, setAudioRef] = useState(null);
   const [isLoadingRecommendationSong, setIsLoadingRecommendationSong] = useState(false);
-  const [isSearchCollapsed, setIsSearchCollapsed] = useState(false);
   const [showIntro, setShowIntro] = useState(true);
   const [step, setStep] = useState(0);
   const [showLyric, setShowLyric] = useState(false);
@@ -22,6 +21,153 @@ const Home = () => {
   const [isLyricsModalOpen, setIsLyricsModalOpen] = useState(false);
   const { theme } = useTheme();
   const { getRecommendations } = useSpotify();
+  const searchContainerRef = useRef(null);
+
+  // Fallback cover used when recommendation thumbnails fail
+  const FALLBACK_COVER = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNjQiIGhlaWdodD0iNjQiIHZpZXdCb3g9IjAgMCA2NCA2NCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHJlY3Qgd2lkdGg9IjY0IiBoZWlnaHQ9IjY0IiBmaWxsPSIjMzMzIi8+Cjx0ZXh0IHg9IjMyIiB5PSI0MCIgdGV4dC1hbmNob3I9Im1pZGRsZSIgZmlsbD0iIzY2NiIgZm9udC1zaXplPSIyNCIgZm9udC1mYW1pbHk9IkFyaWFsIj7imaE8L3RleHQ+Cjwvc3ZnPg==';
+
+  // Dominant color extracted from the main album cover
+  const [coverColor, setCoverColor] = useState(null);
+
+  // Lightweight dominant color extractor with safe fallback
+  const extractDominantColor = (imgEl) => {
+    try {
+      const canvas = document.createElement('canvas');
+      const ctx = canvas.getContext('2d', { willReadFrequently: true });
+      if (!ctx) return null;
+      const w = Math.min(32, imgEl.naturalWidth || 32);
+      const h = Math.min(32, imgEl.naturalHeight || 32);
+      canvas.width = w;
+      canvas.height = h;
+      ctx.drawImage(imgEl, 0, 0, w, h);
+      const { data } = ctx.getImageData(0, 0, w, h);
+      let r = 0, g = 0, b = 0, count = 0;
+      for (let i = 0; i < data.length; i += 4) {
+        const a = data[i + 3];
+        if (a < 16) continue; // ignore near-transparent
+        r += data[i];
+        g += data[i + 1];
+        b += data[i + 2];
+        count++;
+      }
+      if (!count) return null;
+      r = Math.round(r / count);
+      g = Math.round(g / count);
+      b = Math.round(b / count);
+      return { r, g, b };
+    } catch (e) {
+      return null;
+    }
+  };
+
+  // Preload an image by URL with CORS enabled and extract dominant color
+  const computeDominantColorFromUrl = (url) => {
+    if (!url) { setCoverColor(null); onCoverColorChange?.(null); return; }
+    try {
+      const img = new Image();
+      img.crossOrigin = 'anonymous';
+      img.decoding = 'async';
+      img.loading = 'eager';
+      img.onload = () => {
+        const col = extractDominantColor(img);
+        setCoverColor(col);
+        onCoverColorChange?.(col || null);
+      };
+      img.onerror = () => { setCoverColor(null); onCoverColorChange?.(null); };
+      img.src = url;
+    } catch {
+      setCoverColor(null);
+      onCoverColorChange?.(null);
+    }
+  };
+
+  const clamp = (v) => Math.max(0, Math.min(255, v));
+  const adjustColor = ({ r, g, b }, factor = 0.8) => ({
+    r: clamp(Math.round(r * factor)),
+    g: clamp(Math.round(g * factor)),
+    b: clamp(Math.round(b * factor)),
+  });
+  const rgba = ({ r, g, b }, a) => `rgba(${r}, ${g}, ${b}, ${a})`;
+  const getLyricsBackground = (color, theme) => {
+    const darken = adjustColor(color, 0.65);
+    const a1 = theme === 'light' ? 0.85 : 0.7;
+    const a2 = theme === 'light' ? 0.95 : 0.85;
+    return `linear-gradient(135deg, ${rgba(color, a1)} 0%, ${rgba(darken, a2)} 100%)`;
+  };
+
+  // Fast, robust lyrics cleaner. Removes pre-lyrics clutter and normalizes spacing/sections.
+  const normalizeLyrics = (raw) => {
+    if (!raw || typeof raw !== 'string') return raw;
+    let text = raw.replace(/\r\n?/g, '\n');
+
+    // Trim obvious site clutter at the start
+    text = text
+      .replace(/^\s*\d+\s*Contributors.*\n?/i, '')
+      .replace(/^\s*(Contributors|Translations|You might also like|Embed|About|More on Genius).*[\r\n]+/gi, '')
+      .replace(/^\s*.*?\bLyrics\b.*\n/i, '') // e.g., "505 Lyrics"
+      .replace(/^\s*[A-Za-zÀ-ÿ]+\s*:\s*.*\n/gi, '') // language lines like "Italiano: ..."
+      .replace(/^\s*Read.*\n/gi, '');
+
+    // If there's any bracketed section like [Intro]/[Verse]/etc, hard cut everything before it
+    const firstBracket = text.search(/\[[^\]]+\]/);
+    if (firstBracket >= 0) {
+      text = text.slice(firstBracket);
+    }
+
+    // Ensure section headers are isolated and spaced
+    text = text.replace(/\s*\[([^\]]+)\]\s*/g, '\n[$1]\n');
+
+    // Heuristic 1: Insert newline after sentence-ending punctuation before a capital/section
+    text = text.replace(/([a-z0-9)\]])([.!?])\s*(?=[A-Z[])/g, '$1$2\n');
+
+    // Heuristic 2: Fix run-on lines like: callI've -> call\nI've
+    text = text.replace(/([a-z])([A-Z][a-z'’]+)/g, '$1\n$2');
+
+    // Heuristic 3: Also split before common pronoun starts if accidentally concatenated
+    text = text.replace(/([a-z])((?:I['’](?:m|ve|d|ll)))/g, '$1\n$2');
+
+    // Collapse 3+ blank lines to a single blank line
+    text = text.replace(/\n{3,}/g, '\n\n');
+
+    // Trim trailing footer noise
+    text = text.replace(/(?:\n)*(You might also like|Embed|More on Genius)[\s\S]*$/i, '');
+
+    // Final tidy: trim spaces per line and overall
+    text = text
+      .split('\n')
+      .map((l) => l.replace(/\s+$/g, ''))
+      .join('\n')
+      .trim();
+
+    return text;
+  };
+
+  useEffect(() => {
+    setSearchResult(externalResult || null);
+  }, [externalResult]);
+
+  // Reset cover color when the album image changes
+  useEffect(() => {
+    setCoverColor(null);
+    onCoverColorChange?.(null);
+  }, [searchResult?.song?.image, onCoverColorChange]);
+
+  // Collapse on outside click only when results exist
+  useEffect(() => {
+    const handleDocMouseDown = (e) => {
+      const toggleClicked = e.target.closest?.('[data-search-toggle]');
+      if (toggleClicked) return;
+      if (!searchContainerRef.current) return;
+      const clickedInside = searchContainerRef.current.contains(e.target);
+      if (!clickedInside) {
+        if (searchResult && searchResult.song) {
+          onCollapseChange?.(true);
+        }
+      }
+    };
+    document.addEventListener('mousedown', handleDocMouseDown);
+    return () => document.removeEventListener('mousedown', handleDocMouseDown);
+  }, [searchResult, onCollapseChange]);
 
   useEffect(() => {
     const timer1 = setTimeout(() => {
@@ -79,11 +225,16 @@ const Home = () => {
     };
   }, [isLyricsModalOpen]);
 
-  const handleCollapseChange = (isCollapsed) => {
-    setIsSearchCollapsed(isCollapsed);
-  };
-
   const handleSearchResults = async (result) => {
+    console.log('=== Search Results Debug ===');
+    console.log('Full result object:', result);
+    console.log('Song object:', result?.song);
+    console.log('Song image:', result?.song?.image);
+    console.log('Song title:', result?.song?.title);
+    console.log('Song artist:', result?.song?.artist);
+    console.log('Song preview_url:', result?.song?.preview_url);
+    console.log('=== End Search Results Debug ===');
+
     // Stop any currently playing audio when searching for a new song
     if (audioRef) {
       audioRef.pause();
@@ -93,52 +244,69 @@ const Home = () => {
     
     // Minimal processing for fastest display
     if (result && result.song) {
-      // Add sample artist bio if not present
       if (!result.song.artist_bio) {
         result.song.artist_bio = `${result.song.artist} is a talented artist known for their distinctive style and memorable songs.`;
       }
-      
+      if (result.song.lyrics) {
+        result.song.lyrics = normalizeLyrics(result.song.lyrics);
+      }
       // Set result immediately - no recommendations initially
       setSearchResult(result);
+      onSearchResults?.(result);
+     // Try to compute dominant color from current image
+     if (result.song.image) {
+       computeDominantColorFromUrl(result.song.image);
+     } else {
+       setCoverColor(null);
+       onCoverColorChange?.(null);
+     }
+
+      // Proactively fetch preview and high-quality cover so the album image shows without clicking
+      (async () => {
+        try {
+          const needsCover = !result.song.image || result.song.image.startsWith('data:image');
+          const needsPreview = !result.song.preview_url || !result.song.spotify_id;
+          if (needsCover || needsPreview) {
+            const resp = await fetch(`${API_ENDPOINTS.SPOTIFY_PREVIEW}?q=${encodeURIComponent(`${result.song.title} ${result.song.artist}`)}`);
+            if (resp.ok) {
+              const previewData = await resp.json();
+              if (previewData) {
+                result.song.image = previewData.cover || result.song.image;
+                result.song.preview_url = previewData.preview || result.song.preview_url;
+                result.song.preview_source = previewData.source || result.song.preview_source;
+                result.song.spotify_url = previewData.spotifyUrl || result.song.spotify_url;
+                result.song.spotify_id = previewData.spotifyId || result.song.spotify_id;
+                setSearchResult({ ...result });
+               if (previewData.cover) computeDominantColorFromUrl(previewData.cover);
+              }
+            }
+          }
+        } catch (e) {
+          console.error('Error preloading preview/cover:', e);
+        }
+      })();
       
       // Start background recommendations immediately (no 2 second delay)
       setIsLoadingRecommendations(true);
-      // Use setTimeout to avoid blocking UI
       setTimeout(async () => {
         try {
           const recommendations = await getSpotifyRecommendations(result.song.spotify_id, result.song.artist);
           result.song.recommendations = recommendations;
-          setSearchResult({...result});
+          setSearchResult({ ...result });
         } catch (error) {
           result.song.recommendations = getFallbackRecommendations();
-          setSearchResult({...result});
+          setSearchResult({ ...result });
         }
         setIsLoadingRecommendations(false);
-      }, 100); // Reduced from 2000ms to 100ms
+      }, 100);
     } else {
       setSearchResult(result);
+      // Notify parent even when no song to keep state in sync
+      onSearchResults?.(result);
     }
   };
 
-  const handleAlbumCoverClick = async () => {
-    console.log('=== Album Cover Click Debug ===');
-    console.log('Album cover clicked');
-    console.log('Search result object:', searchResult);
-    console.log('Song object:', searchResult?.song);
-    console.log('Preview URL:', searchResult?.song?.preview_url);
-    console.log('Preview URL type:', typeof searchResult?.song?.preview_url);
-    console.log('Preview URL length:', searchResult?.song?.preview_url?.length);
-    console.log('Preview source:', searchResult?.song?.preview_source);
-    console.log('=== End Debug ===');
-    
-    if (!searchResult?.song?.preview_url) {
-      console.log('No preview URL found - showing alert');
-      alert(`🎵 Audio preview not available for "${searchResult?.song?.title}"\n\nThis is common for popular songs due to licensing restrictions. You can listen to the full song on Spotify or YouTube using the buttons below!`);
-      return;
-    }
-
-    console.log('Preview URL exists, proceeding with playback...');
-
+  const playAudio = async (audioUrl) => {
     // If currently playing, pause and stop
     if (isPlaying && audioRef) {
       console.log('Stopping currently playing audio');
@@ -158,9 +326,9 @@ const Home = () => {
     }
 
     try {
-      console.log('Attempting to play:', searchResult.song.preview_url);
+      console.log('Attempting to play:', audioUrl);
       // Create new audio instance
-      const audio = new Audio(searchResult.song.preview_url);
+      const audio = new Audio(audioUrl);
       audio.volume = 0.7;
       audio.preload = 'auto';
       audio.crossOrigin = 'anonymous';
@@ -211,6 +379,64 @@ const Home = () => {
     }
   };
 
+  const handleAlbumCoverClick = async () => {
+    console.log('=== Album Cover Click Debug ===');
+    console.log('Album cover clicked');
+    console.log('Search result object:', searchResult);
+    console.log('Song object:', searchResult?.song);
+    console.log('Preview URL:', searchResult?.song?.preview_url);
+    console.log('Preview URL type:', typeof searchResult?.song?.preview_url);
+    console.log('Preview URL length:', searchResult?.song?.preview_url?.length);
+    console.log('Preview source:', searchResult?.song?.preview_source);
+    console.log('=== End Debug ===');
+    
+    // If no preview URL, try to fetch one first
+    if (!searchResult?.song?.preview_url) {
+      console.log('No preview URL found - attempting to fetch one...');
+      
+      try {
+        const response = await fetch(`${API_ENDPOINTS.SPOTIFY_PREVIEW}?q=${encodeURIComponent(`${searchResult.song.title} ${searchResult.song.artist}`)}`);
+        
+        if (response.ok) {
+          const previewData = await response.json();
+          console.log('Preview data received:', previewData);
+          
+          if (previewData.preview) {
+            // Update the search result with preview data
+            const updatedResult = {
+              ...searchResult,
+              song: {
+                ...searchResult.song,
+                preview_url: previewData.preview,
+                preview_source: previewData.source,
+                image: previewData.cover || searchResult.song.image,
+                spotify_url: previewData.spotifyUrl || searchResult.song.spotify_url,
+                spotify_id: previewData.spotifyId || searchResult.song.spotify_id
+              }
+            };
+            
+            setSearchResult(updatedResult);
+            console.log('Preview URL found! Proceeding with playback:', previewData.preview);
+            
+            // Now try to play with the newly fetched URL
+            await playAudio(previewData.preview);
+            return;
+          }
+        }
+      } catch (error) {
+        console.error('Failed to fetch preview:', error);
+      }
+      
+      // If we still don't have a preview URL, show the alert
+      console.log('No preview URL available - showing alert');
+      alert(`🎵 Audio preview not available for "${searchResult?.song?.title}"\n\nThis is common for popular songs due to licensing restrictions. You can listen to the full song on Spotify or YouTube using the buttons below!`);
+      return;
+    }
+
+    console.log('Preview URL exists, proceeding with playback...');
+    await playAudio(searchResult.song.preview_url);
+  };
+
   const getSpotifyRecommendations = async (spotifyId, artistName) => {
     try {
       const recommendations = await getRecommendations(spotifyId, artistName);
@@ -219,7 +445,7 @@ const Home = () => {
         id: `spotify_${rec.id}_${Date.now()}_${index}`,
         title: rec.title,
         artist: rec.artist,
-        thumbnail: rec.image || 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNjQiIGhlaWdodD0iNjQiIHZpZXdCb3g9IjAgMCA2NCA2NCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHJlY3Qgd2lkdGg9IjY0IiBoZWlnaHQ9IjY0IiBmaWxsPSIjMzMzIi8+Cjx0ZXh0IHg9IjMyIiB5PSI0MCIgdGV4dC1hbmNob3I9Im1pZGRsZSIgZmlsbD0iIzY2NiIgZm9udC1zaXplPSIyNCIgZm9udC1mYW1pbHk9IkFyaWFsIj7imaE8L3RleHQ+Cjwvc3ZnPg==',
+        thumbnail: rec.image || 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNjQiIGhlaWdodD0iNjQiIHZpZXdCb3g9IjAgMCA2NCA2NCIgZmlsbD0ibm9uZSIgeG1zbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHJlY3Qgd2lkdGg9IjY0IiBoZWlnaHQ9IjY0IiBmaWxsPSIjMzMzIi8+Cjx0ZXh0IHg9IjMyIiB5PSI0MCIgdGV4dC1hbmNob3I9Im1pZGRsZSIgZmlsbD0iIzY2NiIgZm9udC1zaXplPSIyNCIgZm9udC1mYW1pbHk9IkFyaWFsIj7imaE8L3RleHQ+Cjwvc3ZnPg==',
         spotify_id: rec.spotify_id
       }));
       
@@ -259,7 +485,7 @@ const Home = () => {
       id: `fallback_${Date.now()}_${index}`, // Add timestamp for uniqueness
       title: song.title,
       artist: song.artist,
-      thumbnail: song.image || 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNjQiIGhlaWdodD0iNjQiIHZpZXdCb3g9IjAgMCA2NCA2NCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHJlY3Qgd2lkdGg9IjY0IiBoZWlnaHQ9IjY0IiBmaWxsPSIjMzMzIi8+Cjx0ZXh0IHg9IjMyIiB5PSI0MCIgdGV4dC1hbmNob3I9Im1pZGRsZSIgZmlsbD0iIzY2NiIgZm9udC1zaXplPSIyNCIgZm9udC1mYW1pbHk9IkFyaWFsIj7imaE8L3RleHQ+Cjwvc3ZnPg=='
+      thumbnail: song.image || 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNjQiIGhlaWdodD0iNjQiIHZpZXdCb3g9IjAgMCA2NCA2NCIgZmlsbD0ibm9uZSIgeG1zbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHJlY3Qgd2lkdGg9IjY0IiBoZWlnaHQ9IjY0IiBmaWxsPSIjMzMzIi8+Cjx0ZXh0IHg9IjMyIiB5PSI0MCIgdGV4dC1hbmNob3I9Im1pZGRsZSIgZmlsbD0iIzY2NiIgZm9udC1zaXplPSIyNCIgZm9udC1mYW1pbHk9IkFyaWFsIj7imaE8L3RleHQ+Cjwvc3ZnPg=='
     }));
   };
 
@@ -303,9 +529,18 @@ const Home = () => {
           if (!result.song.artist_bio) {
             result.song.artist_bio = `${result.song.artist} is a talented artist known for their distinctive style and memorable songs.`;
           }
-          
+          if (result.song.lyrics) {
+            result.song.lyrics = normalizeLyrics(result.song.lyrics);
+          }
           // Set the result immediately - no recommendations initially
           setSearchResult(result);
+         // Compute dominant color from recommendation cover if available
+         if (result.song.image) {
+           computeDominantColorFromUrl(result.song.image);
+         } else {
+           setCoverColor(null);
+           onCoverColorChange?.(null);
+         }
           
           // If no preview URL, try to fetch one from our backend immediately
           if (!result.song.preview_url) {
@@ -323,6 +558,7 @@ const Home = () => {
                   result.song.spotify_id = previewData.spotifyId || result.song.spotify_id;
                   
                   setSearchResult({...result});
+                 if (previewData.cover) computeDominantColorFromUrl(previewData.cover);
                 }
               }
             } catch (error) {
@@ -542,197 +778,216 @@ const Home = () => {
   return (
     <>
       <style>{animationStyles}</style>
-      <div className={`min-h-screen flex flex-col items-center px-4 py-10 transition-colors duration-300 ${getTextColor()} ${
+      <div className={`${getTextColor()} min-h-screen flex flex-col items-stretch px-0 py-6 transition-colors duration-300 ${
         !showIntro ? 'animate-[fadeInMain_2s_ease-out]' : ''
       }`}>
-        {/* Search Section */}
-        <div className="w-full max-w-xl mb-12">
-          <SearchForm 
+        {/* Search Section (collapsible) */}
+        <div
+          ref={searchContainerRef}
+          className={`w-full max-w-xl mx-auto overflow-hidden transition-all duration-300 ${
+            isSearchCollapsed ? 'opacity-0 -translate-y-2 pointer-events-none' : 'opacity-100 translate-y-0'
+          } ${!isSearchCollapsed && !(searchResult && searchResult.song) ? 'mt-24 md:mt-40' : 'mt-2'}`}
+          style={{ maxHeight: isSearchCollapsed ? 0 : 400 }}
+        >
+          <SearchForm
             onSearchResults={handleSearchResults}
-            onCollapseChange={handleCollapseChange}
+            onCollapseChange={onCollapseChange}
           />
         </div>
 
-        {/* Results Section */}
-        <div className={`w-full max-w-5xl flex flex-col gap-8 transition-all duration-500 ${
-          isSearchCollapsed && searchResult ? 'mt-[-4rem]' : 'mt-0'
-        }`}>
+        {/* Results Section - Two-Column Layout */}
+        <div className={`w-full transition-all duration-500 ${isSearchCollapsed ? 'mt-2' : 'mt-6'}`}>
         {searchResult && searchResult.song && (
-          <div className={`backdrop-blur-md p-8 rounded-3xl shadow-xl border transition-all duration-300 animate-fade-in grid grid-cols-1 lg:grid-cols-3 gap-8 ${
-            theme === 'light' 
-              ? 'bg-black/20 border-black/30' 
-              : theme === 'medium'
-              ? 'bg-white/10 border-white/20'
-              : 'bg-black/40 border-indigo-800'
-          }`}>
-            
-            {/* Left Column: Album Art & Artist Info */}
-            <div className="flex flex-col items-center gap-4 lg:col-span-1">
-              <div 
-                className="relative group cursor-pointer"
-                onClick={(e) => {
-                  console.log('Container clicked!', e);
-                  handleAlbumCoverClick();
-                }}
-              >
-                {/* Vinyl Record Base */}
-                <div className={`vinyl-record w-44 h-44 ${isPlaying ? 'vinyl-spinning' : ''}`}>
-                  {/* Album Cover */}
-                  <img 
-                    src={searchResult.song.image || 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMzAwIiBoZWlnaHQ9IjMwMCIgdmlld0JveD0iMCAwIDMwMCAzMDAiIGZpbGw9Im5vbmUiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+CjxyZWN0IHdpZHRoPSIzMDAiIGhlaWdodD0iMzAwIiBmaWxsPSIjMzMzIi8+Cjx0ZXh0IHg9IjE1MCIgeT0iMTcwIiB0ZXh0LWFuY2hvcj0ibWlkZGxlIiBmaWxsPSIjNjY2IiBmb250LXNpemU9IjQ4IiBmb250LWZhbWlseT0iQXJpYWwiPuKZqjwvdGV4dD4KPC9zdmc+'} 
-                    alt="album art" 
-                    className="album-cover"
-                    style={{ pointerEvents: 'none' }}
-                    onError={(e) => {
-                      e.target.src = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMzAwIiBoZWlnaHQ9IjMwMCIgdmlld0JveD0iMCAwIDMwMCAzMDAiIGZpbGw9Im5vbmUiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+CjxyZWN0IHdpZHRoPSIzMDAiIGhlaWdodD0iMzAwIiBmaWxsPSIjMzMzIi8+Cjx0ZXh0IHg9IjE1MCIgeT0iMTcwIiB0ZXh0LWFuY2hvcj0ibWlkZGxlIiBmaWxsPSIjNjY2IiBmb250LXNpemU9IjQ4IiBmb250LWZhbWlseT0iQXJpYWwiPuKZqjwvdGV4dD4KPC9zdmc+';
-                    }}
-                  />
-                </div>
-                  
-                  {/* Play/Pause Overlay */}
-                  {searchResult.song.preview_url && (
-                    <div className={`absolute inset-0 flex items-center justify-center rounded-full transition-opacity duration-300 pointer-events-none ${
-                      isPlaying ? 'opacity-0' : 'opacity-0 group-hover:opacity-100'
-                    }`}>
-                      <div className="bg-black/60 rounded-full p-4 backdrop-blur-sm">
-                        {isPlaying ? (
-                          <Pause className="w-8 h-8 text-white drop-shadow-lg" />
-                        ) : (
-                          <Play className="w-8 h-8 text-white drop-shadow-lg ml-1" />
-                        )}
-                      </div>
-                    </div>
-                  )}
-                  
-                  {/* Vinyl Grooves Effect */}
-                  <div className="absolute inset-2 rounded-full pointer-events-none" style={{
-                    background: `radial-gradient(
-                      circle at center, 
-                      transparent 15%, 
-                      rgba(255,255,255,0.02) 16%, 
-                      transparent 17%, 
-                      rgba(255,255,255,0.02) 18%, 
-                      transparent 19%, 
-                      rgba(255,255,255,0.02) 20%, 
-                      transparent 21%, 
-                      rgba(255,255,255,0.02) 22%, 
-                      transparent 23%, 
-                      rgba(255,255,255,0.02) 24%, 
-                      transparent 25%
-                    )`
-                  }}>
+          <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)] items-start w-full gap-4 px-0 md:px-0">
+            {/* Left Side: Search Results */}
+            <div className={`w-full backdrop-blur-md p-8 rounded-3xl shadow-xl transition-all duration-300 animate-fade-in ${
+              theme === 'light' 
+                ? 'bg-black/20' 
+                : theme === 'medium'
+                ? 'bg-white/10'
+                : 'bg-black/40'
+            }`}>
+              {/* Album Art & Song Info */}
+              <div className="flex flex-col items-center gap-4">
+                <div 
+                  className="relative group cursor-pointer"
+                  onClick={(e) => {
+                    console.log('Container clicked!', e);
+                    handleAlbumCoverClick();
+                  }}
+                >
+                  {/* Vinyl Record Base */}
+                  <div className={`vinyl-record w-44 h-44 ${isPlaying ? 'vinyl-spinning' : ''}`}>
+                    {/* Album Cover */}
+                    <img 
+                      src={searchResult.song.image || 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMzAwIiBoZWlnaHQ9IjMwMCIgdmlld0JveD0iMCAwIDMwMCAzMDAiIGZpbGw9Im5vbmUiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+CjxyZWN0IHdpZHRoPSIzMDAiIGhlaWdodD0iMzAwIiBmaWxsPSIjMzMzIi8+Cjx0ZXh0IHg9IjE1MCIgeT0iMTcwIiB0ZXh0LWFuY2hvcj0ibWlkZGxlIiBmaWxsPSIjNjY2IiBmb250LXNpemU9IjQ4IiBmb250LWZhbWlseT0iQXJpYWwiPuKZqjwvdGV4dD4KPC9zdmc+'} 
+                      alt="album art" 
+                      className="album-cover"
+                      style={{ pointerEvents: 'none' }}
+                      loading="eager"
+                      crossOrigin="anonymous"
+                      onLoad={(e) => {
+                        try {
+                          const col = extractDominantColor(e.target);
+                          setCoverColor(col);
+                          onCoverColorChange?.(col || null);
+                          console.log('Album cover loaded successfully:', e.target.src, col);
+                        } catch {}
+                      }}
+                      onError={(e) => {
+                        e.target.src = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMzAwIiBoZWlnaHQ9IjMwMCIgdmlld0JveD0iMCAwIDMwMCAzMDAiIGZpbGw9Im5vbmUiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+CjxyZWN0IHdpZHRoPSIzMDAiIGhlaWdodD0iMzAwIiBmaWxsPSIjMzMzIi8+Cjx0ZXh0IHg9IjE1MCIgeT0iMTcwIiB0ZXh0LWFuY2hvcj0ibWlkZGxlIiBmaWxsPSIjNjY2IiBmb250LXNpemU9IjQ4IiBmb250LWZhbWlseT0iQXJpYWwiPuKZqjwvdGV4dD4KPC9zdmc+';
+                        setCoverColor(null);
+                        onCoverColorChange?.(null);
+                      }}
+                    />
                   </div>
-                </div>
-              
-              <div className="flex flex-col items-center text-center">
-                <span className={`text-lg font-semibold ${
-                  theme === 'light' ? 'text-gray-900' : 'text-indigo-200'
-                }`}>{searchResult.song.title}</span>
-                <span className={`text-md font-medium ${
-                  theme === 'light' ? 'text-gray-700' : 'text-indigo-400'
-                }`}>{searchResult.song.artist}</span>
-                {searchResult.song.album && (
-                  <div className={`text-xs mt-1 ${
-                    theme === 'light' ? 'text-gray-600' : 'text-gray-400'
-                  }`}>Album: {searchResult.song.album}</div>
-                )}
-              </div>
-
-              {/* Action Buttons */}
-              <div className="flex flex-wrap gap-3 mt-4 justify-center">
-                {searchResult.song.spotify_url && (
-                  <a 
-                    href={searchResult.song.spotify_url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="inline-flex items-center px-5 py-3 bg-green-500 hover:bg-green-600 rounded-full transition-all duration-300 text-white font-medium shadow-lg hover:shadow-xl transform hover:scale-105"
-                  >
-                    <svg width="18" height="18" fill="currentColor" className="mr-2" viewBox="0 0 24 24">
-                      <path d="M12 0C5.4 0 0 5.4 0 12s5.4 12 12 12 12-5.4 12-12S18.66 0 12 0zm5.521 17.34c-.24.359-.66.48-1.021.24-2.82-1.74-6.36-2.101-10.561-1.141-.418.122-.859-.179-.982-.599-.122-.421.18-.861.599-.983 4.56-1.021 8.52-.6 11.64 1.32.42.18.479.659.301 1.02v.141zm1.44-3.3c-.301.42-.841.6-1.262.3-3.239-1.98-8.159-2.58-11.939-1.38-.479.12-1.02-.12-1.14-.6-.12-.48.12-1.021.6-1.141C9.6 9.9 15 10.561 18.72 12.84c.361.181.54.78.241 1.2zm.12-3.36C15.24 8.4 8.82 8.16 5.16 9.301c-.6.179-1.2-.181-1.38-.721-.18-.601.18-1.2.72-1.381 4.26-1.3 11.28-1.02 15.721 1.621.539.3.719 1.02.42 1.56z"/>
-                    </svg>
-                    Listen on Spotify
-                  </a>
-                )}
-                
-                {searchResult.song.youtube_url ? (
-                  <a 
-                    href={searchResult.song.youtube_url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="inline-flex items-center px-5 py-3 bg-red-500 hover:bg-red-600 rounded-full transition-all duration-300 text-white font-medium shadow-lg hover:shadow-xl transform hover:scale-105"
-                  >
-                    <svg width="18" height="18" fill="currentColor" className="mr-2" viewBox="0 0 24 24">
-                      <path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/>
-                    </svg>
-                    Watch on YouTube
-                  </a>
-                ) : (
-                  <a 
-                    href={`https://www.youtube.com/results?search_query=${encodeURIComponent(`${searchResult.song.title} ${searchResult.song.artist}`)}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="inline-flex items-center px-5 py-3 bg-red-500 hover:bg-red-600 rounded-full transition-all duration-300 text-white font-medium shadow-lg hover:shadow-xl transform hover:scale-105"
-                  >
-                    <svg width="18" height="18" fill="currentColor" className="mr-2" viewBox="0 0 24 24">
-                      <path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/>
-                    </svg>
-                    Search on YouTube
-                  </a>
-                )}
-
-                {/* Open in New Tab Button for External Links */}
-                {(searchResult.song.external_url || searchResult.song.genius_url) && (
-                  <a 
-                    href={searchResult.song.external_url || searchResult.song.genius_url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="inline-flex items-center px-5 py-3 bg-purple-500 hover:bg-purple-600 rounded-full transition-all duration-300 text-white font-medium shadow-lg hover:shadow-xl transform hover:scale-105"
-                  >
-                    <ExternalLink className="w-4 h-4 mr-2" />
-                    View Lyrics Source
-                  </a>
-                )}
-              </div>
-
-              {/* Preview Instructions */}
-              {searchResult.song.preview_url && (
-                <div className={`text-sm text-center mt-4 ${
-                  theme === 'light' ? 'text-gray-600' : 'text-gray-400'
-                }`}>
-                  {isPlaying ? (
-                    <div className="text-green-400 font-medium flex items-center justify-center gap-2">
-                      <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse"></div>
-                      Now Playing - Click vinyl to pause
+                    
+                    {/* Play/Pause Overlay */}
+                    {searchResult.song.preview_url && (
+                      <div className={`absolute inset-0 flex items-center justify-center rounded-full transition-opacity duration-300 pointer-events-none ${
+                        isPlaying ? 'opacity-0' : 'opacity-0 group-hover:opacity-100'
+                      }`}>
+                        <div className="bg-black/60 rounded-full p-4 backdrop-blur-sm">
+                          {isPlaying ? (
+                            <Pause className="w-8 h-8 text-white drop-shadow-lg" />
+                          ) : (
+                            <Play className="w-8 h-8 text-white drop-shadow-lg ml-1" />
+                          )}
+                        </div>
+                      </div>
+                    )}
+                    
+                    {/* Vinyl Grooves Effect */}
+                    <div className="absolute inset-2 rounded-full pointer-events-none" style={{
+                      background: `radial-gradient(
+                        circle at center, 
+                        transparent 15%, 
+                        rgba(255,255,255,0.02) 16%, 
+                        transparent 17%, 
+                        rgba(255,255,255,0.02) 18%, 
+                        transparent 19%, 
+                        rgba(255,255,255,0.02) 20%, 
+                        transparent 21%, 
+                        rgba(255,255,255,0.02) 22%, 
+                        transparent 23%, 
+                        rgba(255,255,255,0.02) 24%, 
+                        transparent 25%
+                      )`
+                    }}>
                     </div>
-                  ) : (
-                    "Click vinyl record to play preview"
+                  </div>
+                
+                <div className="flex flex-col items-center text-center">
+                  <span className={`text-lg font-semibold ${
+                    theme === 'light' ? 'text-gray-900' : 'text-indigo-200'
+                  }`}>{searchResult.song.title}</span>
+                  <span className={`text-md font-medium ${
+                    theme === 'light' ? 'text-gray-700' : 'text-indigo-400'
+                  }`}>{searchResult.song.artist}</span>
+                  {searchResult.song.album && (
+                    <div className={`text-xs mt-1 ${
+                      theme === 'light' ? 'text-gray-600' : 'text-gray-400'
+                    }`}>Album: {searchResult.song.album}</div>
                   )}
                 </div>
-              )}
-            </div>
 
-            {/* Right Columns: Lyrics & Additional Info */}
-            <div className="lg:col-span-2 flex flex-col gap-6">
-              
+                {/* Action Buttons */}
+                <div className="flex flex-wrap gap-3 mt-4 justify-center">
+                  {/* YouTube button (direct link if available, else search) */}
+                  {searchResult.song.youtube_url ? (
+                    <a 
+                      href={searchResult.song.youtube_url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center px-5 py-3 bg-red-500 hover:bg-red-600 rounded-full transition-all duration-300 text-white font-medium shadow-lg hover:shadow-xl transform hover:scale-105"
+                    >
+                      <svg width="18" height="18" fill="currentColor" className="mr-2" viewBox="0 0 24 24">
+                        <path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/>
+                      </svg>
+                      YouTube
+                    </a>
+                  ) : (
+                    <a 
+                      href={`https://www.youtube.com/results?search_query=${encodeURIComponent(`${searchResult.song.title} ${searchResult.song.artist}`)}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center px-5 py-3 bg-red-500 hover:bg-red-600 rounded-full transition-all duration-300 text-white font-medium shadow-lg hover:shadow-xl transform hover:scale-105"
+                    >
+                      <svg width="18" height="18" fill="currentColor" className="mr-2" viewBox="0 0 24 24">
+                        <path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/>
+                      </svg>
+                      YouTube
+                    </a>
+                  )}
+
+                  {/* Spotify button (direct link if available, else search) */}
+                  {searchResult.song.spotify_url ? (
+                    <a 
+                      href={searchResult.song.spotify_url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center px-5 py-3 bg-green-500 hover:bg-green-600 rounded-full transition-all duration-300 text-white font-medium shadow-lg hover:shadow-xl transform hover:scale-105"
+                    >
+                      <svg width="18" height="18" fill="currentColor" className="mr-2" viewBox="0 0 24 24">
+                        <path d="M12 0C5.4 0 0 5.4 0 12s5.4 12 12 12 12-5.4 12-12S18.66 0 12 0zm5.521 17.34c-.24.359-.66.48-1.021.24-2.82-1.74-6.36-2.101-10.561-1.141-.418.122-.859-.179-.982-.599-.122-.421.18-.861.599-.983 4.56-1.021 8.52-.6 11.64 1.32.42.18.479.659.301 1.02v.141zm1.44-3.3c-.301.42-.841.6-1.262.3-3.239-1.98-8.159-2.58-11.939-1.38-.479.12-1.02-.12-1.14-.6-.12-.48.12-1.021.6-1.141C9.6 9.9 15 10.561 18.72 12.84c.361.181.54.78.241 1.2zm.12-3.36C15.24 8.4 8.82 8.16 5.16 9.301c-.6.179-1.2-.181-1.38-.721-.18-.601.18-1.2.72-1.381 4.26-1.3 11.28-1.02 15.721 1.621.539.3.719 1.02.42 1.56z"/>
+                      </svg>
+                      Spotify
+                    </a>
+                  ) : (
+                    <a 
+                      href={`https://open.spotify.com/search/${encodeURIComponent(`${searchResult.song.title} ${searchResult.song.artist}`)}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center px-5 py-3 bg-green-500 hover:bg-green-600 rounded-full transition-all duration-300 text-white font-medium shadow-lg hover:shadow-xl transform hover:scale-105"
+                    >
+                      <svg width="18" height="18" fill="currentColor" className="mr-2" viewBox="0 0 24 24">
+                        <path d="M12 0C5.4 0 0 5.4 0 12s5.4 12 12 12 12-5.4 12-12S18.66 0 12 0zm5.521 17.34c-.24.359-.66.48-1.021.24-2.82-1.74-6.36-2.101-10.561-1.141-.418.122-.859-.179-.982-.599-.122-.421.18-.861.599-.983 4.56-1.021 8.52-.6 11.64 1.32.42.18.479.659.301 1.02v.141zm1.44-3.3c-.301.42-.841.6-1.262.3-3.239-1.98-8.159-2.58-11.939-1.38-.479.12-1.02-.12-1.14-.6-.12-.48.12-1.021.6-1.141C9.6 9.9 15 10.561 18.72 12.84c.361.181.54.78.241 1.2zm.12-3.36C15.24 8.4 8.82 8.16 5.16 9.301c-.6.179-1.2-.181-1.38-.721-.18-.601.18-1.2.72-1.381 4.26-1.3 11.28-1.02 15.721 1.621.539.3.719 1.02.42 1.56z"/>
+                      </svg>
+                      Spotify
+                    </a>
+                  )}
+
+                  {/* Open in New Tab Button for External Links */}
+                  {(searchResult.song.external_url || searchResult.song.genius_url) && (
+                    <a 
+                      href={searchResult.song.external_url || searchResult.song.genius_url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center px-5 py-3 bg-purple-500 hover:bg-purple-600 rounded-full transition-all duration-300 text-white font-medium shadow-lg hover:shadow-xl transform hover:scale-105"
+                    >
+                      <ExternalLink className="w-4 h-4 mr-2" />
+                      View Lyrics Source
+                    </a>
+                  )}
+                </div>
+              </div>
+
               {/* Lyrics Display */}
               {searchResult.song.lyrics && (
                 <div 
                   onClick={() => setIsLyricsModalOpen(true)}
-                  className={`rounded-2xl p-6 shadow-md max-h-96 overflow-y-auto transition-all duration-300 cursor-pointer hover:shadow-lg hover:scale-[1.02] ${
-                    theme === 'light' 
-                      ? 'bg-gradient-to-br from-black/60 to-gray-800/80 hover:from-black/70 hover:to-gray-800/90 custom-scrollbar-light' 
-                      : theme === 'medium'
-                      ? 'bg-gradient-to-br from-black/50 to-indigo-900/70 hover:from-black/60 hover:to-indigo-900/80 custom-scrollbar'
-                      : 'bg-gradient-to-br from-black/60 to-indigo-900/80 hover:from-black/70 hover:to-indigo-900/90 custom-scrollbar-dark'
+                  className={`rounded-2xl p-6 shadow-md max-h-96 overflow-y-auto transition-all duration-300 cursor-pointer hover:shadow-lg hover:scale-[1.02] mt-6 ${
+                    coverColor
+                      ? (theme === 'light' 
+                        ? 'custom-scrollbar-light' 
+                        : theme === 'medium' 
+                          ? 'custom-scrollbar' 
+                          : 'custom-scrollbar-dark')
+                      : (
+                        theme === 'light' 
+                          ? 'bg-gradient-to-br from-black/60 to-gray-800/80 hover:from-black/70 hover:to-gray-800/90 custom-scrollbar-light' 
+                          : theme === 'medium'
+                          ? 'bg-gradient-to-br from-black/50 to-indigo-900/70 hover:from-black/60 hover:to-indigo-900/80 custom-scrollbar'
+                          : 'bg-gradient-to-br from-black/60 to-indigo-900/80 hover:from-black/70 hover:to-indigo-900/90 custom-scrollbar-dark'
+                      )
                   }`}
-                  title="Click to expand lyrics"
+                  style={coverColor ? { background: getLyricsBackground(coverColor, theme) } : undefined}
                 >
                   <h3 className={`text-lg font-semibold mb-4 flex items-center gap-2 ${
                     theme === 'light' ? 'text-white' : 'text-gray-100'
                   }`}>
                     <Music className="w-5 h-5" />
                     Lyrics
-                    <span className="text-xs opacity-60 ml-auto">Click to expand</span>
                   </h3>
                   <pre className={`whitespace-pre-wrap font-mono text-lg leading-relaxed pb-3 ${
                     theme === 'light' ? 'text-gray-100' : 'text-gray-100'
@@ -744,7 +999,7 @@ const Home = () => {
 
               {/* Recommendations Section */}
               {(searchResult.song.recommendations && searchResult.song.recommendations.length > 0) || isLoadingRecommendations ? (
-                <div>
+                <div className="mt-6">
                   <div className={`font-semibold text-md mb-4 ${
                     theme === 'light' ? 'text-gray-900' : 'text-indigo-200'
                   }`}>
@@ -774,10 +1029,13 @@ const Home = () => {
                         <div 
                           key={rec.id || index} 
                           className={`rounded-xl p-4 flex flex-col items-center transition-all duration-300 shadow-md hover:scale-105 cursor-pointer relative ${
-                            theme === 'light' 
-                              ? 'bg-gray-200/70 hover:bg-gray-300/70' 
-                              : 'bg-gray-900/70 hover:bg-gray-800'
+                            coverColor ? '' : (
+                              theme === 'light' 
+                                ? 'bg-gray-200/70 hover:bg-gray-300/70' 
+                                : 'bg-gray-900/70 hover:bg-gray-800'
+                            )
                           } ${isLoadingRecommendationSong ? 'pointer-events-none opacity-50' : ''}`}
+                          style={coverColor ? { background: getLyricsBackground(coverColor, theme) } : undefined}
                           onClick={() => {
                             if (!isLoadingRecommendationSong) {
                               handleRecommendationClick(rec);
@@ -791,9 +1049,13 @@ const Home = () => {
                             </div>
                           )}
                           <img 
-                            src={rec.thumbnail || rec.image} 
+                            src={rec.thumbnail || rec.image || FALLBACK_COVER} 
                             alt="cover" 
                             className="w-16 h-16 rounded mb-2 object-cover border-2 border-indigo-300"
+                            loading="lazy"
+                            decoding="async"
+                            referrerPolicy="no-referrer"
+                            onError={(e) => { e.currentTarget.src = FALLBACK_COVER; }}
                           />
                           <div className={`text-sm font-bold text-center ${
                             theme === 'light' ? 'text-gray-900' : 'text-gray-100'
@@ -805,10 +1067,6 @@ const Home = () => {
                           }`}>
                             {rec.artist}
                           </div>
-                          <div className={`text-xs text-center mt-1 opacity-60 ${
-                            theme === 'light' ? 'text-gray-500' : 'text-gray-500'
-                          }`}>
-                          </div>
                         </div>
                       ))}
                     </div>
@@ -816,12 +1074,14 @@ const Home = () => {
                 </div>
               ) : null}
             </div>
+
+            {/* Right Side: Artist Information */}
+            {searchResult && searchResult.song && searchResult.song.artist && (
+              <div className="w-full -mt-0 lg:-mt-10">
+                <ArtistSection artistName={searchResult.song.artist} coverColor={coverColor} />
+              </div>
+            )}
           </div>
-        )}
-        
-        {/* Artist Information Section */}
-        {searchResult && searchResult.song && searchResult.song.artist && (
-          <ArtistSection artistName={searchResult.song.artist} />
         )}
         
         </div>

@@ -6,7 +6,7 @@ import SimilarArtists from './SimilarArtists';
 import { Loader, AlertCircle } from 'lucide-react';
 import { useTheme } from '../contexts/ThemeContext';
 
-export default function ArtistSection({ artistName }) {
+export default function ArtistSection({ artistName, genresOnly = false, coverColor = null }) {
   const [artistData, setArtistData] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(false);
@@ -38,6 +38,19 @@ export default function ArtistSection({ artistName }) {
   }, [artistName]);
 
   if (loading) {
+    if (genresOnly) {
+      return (
+        <div className="flex items-center justify-center gap-2">
+          <Loader className="animate-spin w-4 h-4 text-indigo-500" />
+          <span className={`text-xs transition-colors ${
+            theme === 'light' ? 'text-gray-600' : 'text-gray-400'
+          }`}>
+            Loading genres...
+          </span>
+        </div>
+      );
+    }
+    
     return (
       <section className="mt-10">
         <div className={`p-6 rounded-xl shadow-lg border backdrop-blur-md transition-all duration-300 ${
@@ -61,6 +74,10 @@ export default function ArtistSection({ artistName }) {
   }
 
   if (error) {
+    if (genresOnly) {
+      return null; // Don't show error for genres only
+    }
+    
     return (
       <section className="mt-10">
         <div className={`p-6 rounded-xl shadow-lg border backdrop-blur-md transition-all duration-300 ${
@@ -85,11 +102,17 @@ export default function ArtistSection({ artistName }) {
 
   if (!artistData) return null;
 
+  // If genresOnly mode, return only the genres with compact styling
+  if (genresOnly) {
+    return <GenreTags tags={artistData.tags} compact={true} />;
+  }
+
+  // Full artist section
   return (
     <section className="mt-10 space-y-6">
-      <ArtistBio name={artistData.name} bio={artistData.bio} image={artistData.image} />
+      <ArtistBio name={artistData.name} bio={artistData.bio} image={artistData.image} coverColor={coverColor} />
       <GenreTags tags={artistData.tags} />
-      <SimilarArtists artists={artistData.similar} />
+      <SimilarArtists artists={artistData.similar} coverColor={coverColor} />
     </section>
   );
 }
