@@ -6,6 +6,7 @@ import { useTheme } from '../contexts/ThemeContext';
 import useSpotify from '../hooks/useSpotify';
 import { API_ENDPOINTS } from '../config/api';
 import SongDetails from '../components/SongDetails';
+import SongInsights from '../components/SongInsights';
 
 const Home = ({ searchResult: externalResult, onSearchResults, onCollapseChange, isSearchCollapsed, onCoverColorChange }) => {
   const [searchResult, setSearchResult] = useState(externalResult || null);
@@ -934,38 +935,39 @@ const Home = ({ searchResult: externalResult, onSearchResults, onCollapseChange,
             }`}>
               {/* Album Art & Song Info */}
               <div className="flex flex-col items-center gap-4">
-                <div 
-                  className="relative group cursor-pointer"
-                  onClick={(e) => {
-                    console.log('Container clicked!', e);
-                    handleAlbumCoverClick();
-                  }}
-                >
-                  {/* Vinyl Record Base */}
-                  <div className={`vinyl-record w-44 h-44 ${isPlaying ? 'vinyl-spinning' : ''}`}>
-                    {/* Album Cover */}
-                    <img 
-                      src={searchResult.song.image || 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMzAwIiBoZWlnaHQ9IjMwMCIgdmlld0JveD0iMCAwIDMwMCAzMDAiIGZpbGw9Im5vbmUiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+CjxyZWN0IHdpZHRoPSIzMDAiIGhlaWdodD0iMzAwIiBmaWxsPSIjMzMzIi8+Cjx0ZXh0IHg9IjE1MCIgeT0iMTcwIiB0ZXh0LWFuY2hvcj0ibWlkZGxlIiBmaWxsPSIjNjY2IiBmb250LXNpemU9IjQ4IiBmb250LWZhbWlseT0iQXJpYWwiPuKZqjwvdGV4dD4KPC9zdmc+'} 
-                      alt="album art" 
-                      className="album-cover"
-                      style={{ pointerEvents: 'none' }}
-                      loading="eager"
-                      crossOrigin="anonymous"
-                      onLoad={(e) => {
-                        try {
-                          const col = extractDominantColor(e.target);
-                          setCoverColor(col);
-                          onCoverColorChange?.(col || null);
-                          console.log('Album cover loaded successfully:', e.target.src, col);
-                        } catch {}
-                      }}
-                      onError={(e) => {
-                        e.target.src = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMzAwIiBoZWlnaHQ9IjMwMCIgdmlld0JveD0iMCAwIDMwMCAzMDAiIGZpbGw9Im5vbmUiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+CjxyZWN0IHdpZHRoPSIzMDAiIGhlaWdodD0iMzAwIiBmaWxsPSIjMzMzIi8+Cjx0ZXh0IHg9IjE1MCIgeT0iMTcwIiB0ZXh0LWFuY2hvcj0ibWlkZGxlIiBmaWxsPSIjNjY2IiBmb250LXNpemU9IjQ4IiBmb250LWZhbWlseT0iQXJpYWwiPuKZqjwvdGV4dD4KPC9zdmc+';
-                        setCoverColor(null);
-                        onCoverColorChange?.(null);
-                      }}
-                    />
-                  </div>
+                <div className="w-full flex items-start justify-center gap-4">
+                  <div 
+                    className="relative group cursor-pointer"
+                    onClick={(e) => {
+                      console.log('Container clicked!', e);
+                      handleAlbumCoverClick();
+                    }}
+                  >
+                    {/* Vinyl Record Base */}
+                    <div className={`vinyl-record w-44 h-44 ${isPlaying ? 'vinyl-spinning' : ''}`}>
+                      {/* Album Cover */}
+                      <img 
+                        src={searchResult.song.image || 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMzAwIiBoZWlnaHQ9IjMwMCIgdmlld0JveD0iMCAwIDMwMCAzMDAiIGZpbGw9Im5vbmUiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+CjxyZWN0IHdpZHRoPSIzMDAiIGhlaWdodD0iMzAwIiBmaWxsPSIjMzMzIi8+Cjx0ZXh0IHg9IjE1MCIgeT0iMTcwIiB0ZXh0LWFuY2hvcj0ibWlkZGxlIiBmaWxsPSIjNjY2IiBmb250LXNpemU9IjQ4IiBmb250LWZhbWlseT0iQXJpYWwiPuKZqjwvdGV4dD4KPC9zdmc+'} 
+                        alt="album art" 
+                        className="album-cover"
+                        style={{ pointerEvents: 'none' }}
+                        loading="eager"
+                        crossOrigin="anonymous"
+                        onLoad={(e) => {
+                          try {
+                            const col = extractDominantColor(e.target);
+                            setCoverColor(col);
+                            onCoverColorChange?.(col || null);
+                            console.log('Album cover loaded successfully:', e.target.src, col);
+                          } catch {}
+                        }}
+                        onError={(e) => {
+                          e.target.src = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMzAwIiBoZWlnaHQ9IjMwMCIgdmlld0JveD0iMCAwIDMwMCAzMDAiIGZpbGw9Im5vbmUiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+CjxyZWN0IHdpZHRoPSIzMDAiIGhlaWdodD0iMzAwIiBmaWxsPSIjMzMzIi8+Cjx0ZXh0IHg9IjE1MCIgeT0iMTcwIiB0ZXh0LWFuY2hvcj0ibWlkZGxlIiBmaWxsPSIjNjY2IiBmb250LXNpemU9IjQ4IiBmb250LWZhbWlseT0iQXJpYWwiPuKZqjwvdGV4dD4KPC9zdmc+';
+                          setCoverColor(null);
+                          onCoverColorChange?.(null);
+                        }}
+                      />
+                    </div>
                     
                     {/* Play/Pause Overlay */}
                     {searchResult.song.preview_url && (
@@ -1001,6 +1003,17 @@ const Home = ({ searchResult: externalResult, onSearchResults, onCollapseChange,
                     }}>
                     </div>
                   </div>
+                  {/* Insights panel on the right of the vinyl (visible on md+) */}
+                  {searchResult?.song?.spotify_id && (
+                    <div className="hidden md:block">
+                      <SongInsights 
+                        spotifyId={searchResult.song.spotify_id} 
+                        theme={theme} 
+                        coverColor={coverColor} 
+                      />
+                    </div>
+                  )}
+                </div>
                 
                 <div className="flex flex-col items-center text-center">
                   <div className="flex items-center gap-2 flex-wrap justify-center">
