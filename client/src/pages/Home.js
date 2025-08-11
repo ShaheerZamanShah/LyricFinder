@@ -297,6 +297,32 @@ const Home = ({ searchResult: externalResult, onSearchResults, onCollapseChange,
                 result.song.preview_source = previewData.source || result.song.preview_source;
                 result.song.spotify_url = previewData.spotifyUrl || result.song.spotify_url;
                 result.song.spotify_id = previewData.spotifyId || result.song.spotify_id;
+  // Compute collaborator names once per render for display badges/line
+  const collaboratorNames = (() => {
+    const song = searchResult?.song;
+    if (!song) return [];
+    if (Array.isArray(song.featured_artists) && song.featured_artists.length > 0) {
+      return song.featured_artists;
+    }
+    if (Array.isArray(song.artists) && song.artist) {
+      return song.artists
+        .map(a => a?.name)
+        .filter(n => n && n.toLowerCase() !== (song.artist || '').toLowerCase());
+    }
+    return [];
+  })();
+  
+                result.song.preview_url = previewData.preview || result.song.preview_url;
+                result.song.preview_source = previewData.source || result.song.preview_source;
+                result.song.spotify_url = previewData.spotifyUrl || result.song.spotify_url;
+                result.song.spotify_id = previewData.spotifyId || result.song.spotify_id;
+                // Persist structured artist data for UI
+                if (Array.isArray(previewData.artists)) {
+                  result.song.artists = previewData.artists;
+                }
+                if (Array.isArray(previewData.albumArtists)) {
+                  result.song.album_artists = previewData.albumArtists;
+                }
                 // Use Spotify artists array if present to detect collaborators/features
                 if (Array.isArray(previewData.artists) && previewData.artists.length > 0) {
                   const primary = previewData.albumArtists?.[0]?.name || result.song.artist;
@@ -613,6 +639,13 @@ const Home = ({ searchResult: externalResult, onSearchResults, onCollapseChange,
                   result.song.image = previewData.cover || result.song.image;
                   result.song.spotify_url = previewData.spotifyUrl || result.song.spotify_url;
                   result.song.spotify_id = previewData.spotifyId || result.song.spotify_id;
+                  // Persist structured artist data for UI
+                  if (Array.isArray(previewData.artists)) {
+                    result.song.artists = previewData.artists;
+                  }
+                  if (Array.isArray(previewData.albumArtists)) {
+                    result.song.album_artists = previewData.albumArtists;
+                  }
                   // Use Spotify artists array if present to detect collaborators/features
                   if (Array.isArray(previewData.artists) && previewData.artists.length > 0) {
                     const primary = previewData.albumArtists?.[0]?.name || result.song.artist;
@@ -957,12 +990,29 @@ const Home = ({ searchResult: externalResult, onSearchResults, onCollapseChange,
                   </div>
                 
                 <div className="flex flex-col items-center text-center">
-                  <span className={`text-lg font-semibold ${
-                    theme === 'light' ? 'text-gray-900' : 'text-indigo-200'
-                  }`}>{searchResult.song.title}</span>
+                  <div className="flex items-center gap-2 flex-wrap justify-center">
+                    <span className={`text-lg font-semibold ${
+                      theme === 'light' ? 'text-gray-900' : 'text-indigo-200'
+                    }`}>{searchResult.song.title}</span>
+                    {collaboratorNames.length > 0 && (
+                      <div className="flex items-center gap-1">
+                        {collaboratorNames.slice(0, 3).map((name, idx) => (
+                          <span key={idx} className="text-[10px] px-2 py-0.5 rounded-full bg-indigo-600/80 text-white shadow-sm">{name}</span>
+                        ))}
+                        {collaboratorNames.length > 3 && (
+                          <span className="text-[10px] px-2 py-0.5 rounded-full bg-indigo-600/50 text-white">+{collaboratorNames.length - 3}</span>
+                        )}
+                      </div>
+                    )}
+                  </div>
                   <span className={`text-md font-medium ${
                     theme === 'light' ? 'text-gray-700' : 'text-indigo-400'
                   }`}>{searchResult.song.artist}</span>
+                  {collaboratorNames.length > 0 && (
+                    <div className={`text-xs mt-0.5 ${theme === 'light' ? 'text-gray-600' : 'text-gray-300'}`}>
+                      with {collaboratorNames.join(', ')}
+                    </div>
+                  )}
                   {searchResult.song.album && (
                     <div className={`text-xs mt-1 ${
                       theme === 'light' ? 'text-gray-600' : 'text-gray-400'
