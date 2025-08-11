@@ -265,7 +265,9 @@ const Home = ({ searchResult: externalResult, onSearchResults, onCollapseChange,
       (async () => {
         try {
           const needsCover = !result.song.image || result.song.image.startsWith('data:image');
-          const needsPreview = !result.song.preview_url || !result.song.spotify_id;
+          const needsPreview = !result.song.preview_url || !result.song.spotify_id || !result.song.spotify_url;
+
+          // Fetch Spotify preview/details if needed
           if (needsCover || needsPreview) {
             const resp = await fetch(`${API_ENDPOINTS.SPOTIFY_PREVIEW}?q=${encodeURIComponent(`${result.song.title} ${result.song.artist}`)}`);
             if (resp.ok) {
@@ -281,8 +283,20 @@ const Home = ({ searchResult: externalResult, onSearchResults, onCollapseChange,
               }
             }
           }
+
+          // Resolve exact YouTube link (safe if no key configured)
+          try {
+            const ytResp = await fetch(`${API_ENDPOINTS.YOUTUBE_LINK}?q=${encodeURIComponent(`${result.song.title} ${result.song.artist}`)}`);
+            if (ytResp.ok) {
+              const ytData = await ytResp.json();
+              if (ytData && ytData.url) {
+                result.song.youtube_url = ytData.url;
+                setSearchResult({ ...result });
+              }
+            }
+          } catch {}
         } catch (e) {
-          console.error('Error preloading preview/cover:', e);
+          console.error('Error preloading preview/cover or youtube link:', e);
         }
       })();
       
@@ -401,14 +415,14 @@ const Home = ({ searchResult: externalResult, onSearchResults, onCollapseChange,
           const previewData = await response.json();
           console.log('Preview data received:', previewData);
           
-          if (previewData.preview) {
+          if (previewData.preview || previewData.spotifyUrl) {
             // Update the search result with preview data
             const updatedResult = {
               ...searchResult,
               song: {
                 ...searchResult.song,
-                preview_url: previewData.preview,
-                preview_source: previewData.source,
+                preview_url: previewData.preview || searchResult.song.preview_url,
+                preview_source: previewData.source || searchResult.song.preview_source,
                 image: previewData.cover || searchResult.song.image,
                 spotify_url: previewData.spotifyUrl || searchResult.song.spotify_url,
                 spotify_id: previewData.spotifyId || searchResult.song.spotify_id
@@ -416,11 +430,13 @@ const Home = ({ searchResult: externalResult, onSearchResults, onCollapseChange,
             };
             
             setSearchResult(updatedResult);
-            console.log('Preview URL found! Proceeding with playback:', previewData.preview);
+            console.log('Preview/Spotify URL found!');
             
-            // Now try to play with the newly fetched URL
-            await playAudio(previewData.preview);
-            return;
+            // Now try to play if preview exists
+            if (previewData.preview) {
+              await playAudio(previewData.preview);
+              return;
+            }
           }
         }
       } catch (error) {
@@ -543,16 +559,18 @@ const Home = ({ searchResult: externalResult, onSearchResults, onCollapseChange,
          }
           
           // If no preview URL, try to fetch one from our backend immediately
-          if (!result.song.preview_url) {
+          if (!result.song.preview_url || !result.song.spotify_url) {
             try {
               const response = await fetch(`${API_ENDPOINTS.SPOTIFY_PREVIEW}?q=${encodeURIComponent(`${result.song.title} ${result.song.artist}`)}`);
               
               if (response.ok) {
                 const previewData = await response.json();
                 
-                if (previewData.preview) {
-                  result.song.preview_url = previewData.preview;
-                  result.song.preview_source = previewData.source;
+                if (previewData) {
+                  if (previewData.preview) {
+                    result.song.preview_url = previewData.preview;
+                    result.song.preview_source = previewData.source;
+                  }
                   result.song.image = previewData.cover || result.song.image;
                   result.song.spotify_url = previewData.spotifyUrl || result.song.spotify_url;
                   result.song.spotify_id = previewData.spotifyId || result.song.spotify_id;
@@ -565,6 +583,18 @@ const Home = ({ searchResult: externalResult, onSearchResults, onCollapseChange,
               console.error('Failed to fetch preview:', error);
             }
           }
+
+          // Resolve exact YouTube link
+          try {
+            const ytResp = await fetch(`${API_ENDPOINTS.YOUTUBE_LINK}?q=${encodeURIComponent(`${result.song.title} ${result.song.artist}`)}`);
+            if (ytResp.ok) {
+              const ytData = await ytResp.json();
+              if (ytData && ytData.url) {
+                result.song.youtube_url = ytData.url;
+                setSearchResult({ ...result });
+              }
+            }
+          } catch {}
           
           // Load recommendations in background (remove artificial delay)
           setIsLoadingRecommendations(true);
