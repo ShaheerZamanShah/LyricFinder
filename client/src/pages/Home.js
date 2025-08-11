@@ -6,6 +6,7 @@ import { useTheme } from '../contexts/ThemeContext';
 import useSpotify from '../hooks/useSpotify';
 import { API_ENDPOINTS } from '../config/api';
 import SongDetails from '../components/SongDetails';
+import PopularityMeter from '../components/PopularityMeter';
 
 const Home = ({ searchResult: externalResult, onSearchResults, onCollapseChange, isSearchCollapsed, onCoverColorChange }) => {
   const [searchResult, setSearchResult] = useState(externalResult || null);
@@ -934,7 +935,7 @@ const Home = ({ searchResult: externalResult, onSearchResults, onCollapseChange,
             }`}>
               {/* Album Art & Song Info */}
               <div className="flex flex-col items-center gap-4">
-                <div className="w-full flex items-start justify-center gap-4">
+                <div className="w-full flex flex-col md:flex-row items-center md:items-start justify-center gap-4">
                   <div 
                     className="relative group cursor-pointer"
                     onClick={(e) => {
@@ -967,7 +968,16 @@ const Home = ({ searchResult: externalResult, onSearchResults, onCollapseChange,
                         }}
                       />
                     </div>
-                    
+                  {/* Popularity + Vibe: below on small, right on md+ */}
+                  {searchResult?.song && (
+                    <div className="w-full md:w-auto">
+                      <PopularityMeter 
+                        songId={searchResult.song.spotify_id}
+                        title={searchResult.song.title}
+                        artist={searchResult.song.artist}
+                      />
+                    </div>
+                  )}
                     {/* Play/Pause Overlay */}
                     {searchResult.song.preview_url && (
                       <div className={`absolute inset-0 flex items-center justify-center rounded-full transition-opacity duration-300 pointer-events-none ${
