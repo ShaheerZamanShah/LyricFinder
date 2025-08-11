@@ -2,9 +2,10 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { API_ENDPOINTS } from '../config/api';
 
 // Small UI next to the vinyl: popularity gradient bar + audio features badges
-const SongInsights = ({ spotifyId, theme, coverColor }) => {
+const SongInsights = ({ spotifyId, title, artist, theme, coverColor }) => {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(false);
+  const [resolvedId, setResolvedId] = useState(spotifyId || null);
 
   // Gradient helpers for label bar and subtle background harmony
   const clamp = (v) => Math.max(0, Math.min(255, v));
@@ -53,13 +54,36 @@ const SongInsights = ({ spotifyId, theme, coverColor }) => {
     return { primary, secondary, all: unique };
   };
 
+  // Resolve a Spotify track ID if missing using preview endpoint with title+artist
+  useEffect(() => {
+    let active = true;
+    async function resolveId() {
+      if (resolvedId) return; // already have
+      if (!title || !artist) return; // not enough info
+      try {
+        const q = `${title} ${artist}`;
+        const resp = await fetch(`${API_ENDPOINTS.SPOTIFY_PREVIEW}?q=${encodeURIComponent(q)}`);
+        if (resp.ok) {
+          const json = await resp.json();
+          if (json?.spotifyId && active) setResolvedId(json.spotifyId);
+        }
+      } catch {
+        /* ignore */
+      }
+    }
+    resolveId();
+    return () => { active = false; };
+  }, [title, artist, resolvedId]);
+
+  // Load features whenever we have an ID (prop or resolved)
   useEffect(() => {
     let active = true;
     async function load() {
-      if (!spotifyId) return;
+      const id = spotifyId || resolvedId;
+      if (!id) return;
       setLoading(true);
       try {
-        const resp = await fetch(`${API_ENDPOINTS.SPOTIFY_AUDIO_FEATURES}?track_id=${encodeURIComponent(spotifyId)}`);
+        const resp = await fetch(`${API_ENDPOINTS.SPOTIFY_AUDIO_FEATURES}?track_id=${encodeURIComponent(id)}`);
         if (!resp.ok) throw new Error(`Failed to load audio features: ${resp.status}`);
         const json = await resp.json();
         if (active) setData(json);
@@ -71,9 +95,7 @@ const SongInsights = ({ spotifyId, theme, coverColor }) => {
     }
     load();
     return () => { active = false; };
-  }, [spotifyId]);
-
-  if (!spotifyId) return null;
+  }, [spotifyId, resolvedId]);
 
   const popularity = Math.max(0, Math.min(100, Number(data?.popularity ?? 0)));
   const features = data?.features || {};
@@ -109,7 +131,7 @@ const SongInsights = ({ spotifyId, theme, coverColor }) => {
       </div>
 
       <div className={`mt-3 text-xs font-semibold ${subTone}`}>Vibe</div>
-      {loading ? (
+  {loading ? (
         <div className="grid grid-cols-3 gap-2 mt-2">
           {Array.from({ length: 6 }).map((_, i) => (
             <div key={i} className="h-6 rounded-md bg-gray-500/20 animate-pulse" />

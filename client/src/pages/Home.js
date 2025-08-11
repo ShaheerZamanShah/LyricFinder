@@ -1004,9 +1004,11 @@ const Home = ({ searchResult: externalResult, onSearchResults, onCollapseChange,
                     </div>
                   </div>
                   {/* Insights panel: below on small screens, right of vinyl on md+ */}
-                  {searchResult?.song?.spotify_id && (
+                  {searchResult?.song && (
                     <SongInsights 
-                      spotifyId={searchResult.song.spotify_id} 
+                      spotifyId={searchResult.song.spotify_id}
+                      title={searchResult.song.title}
+                      artist={searchResult.song.artist}
                       theme={theme} 
                       coverColor={coverColor} 
                     />
