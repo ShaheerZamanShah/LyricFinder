@@ -6,9 +6,13 @@ const DEFAULT_LIBRE_URL = process.env.LIBRETRANSLATE_URL || 'https://libretransl
 
 // Local romanization libs
 let toRomaji, pinyin, transliterate;
+let koRomanizeMod, heTransliterate;
 try { toRomaji = require('wanakana').toRomaji; } catch (_) {}
 try { pinyin = require('pinyin'); } catch (_) {}
 try { transliterate = require('transliteration').transliterate; } catch (_) {}
+// Optional: Korean and Hebrew romanizers if available
+try { koRomanizeMod = require('hangul-romanization'); } catch (_) {}
+try { heTransliterate = require('hebrew-transliteration').transliterate; } catch (_) {}
 
 // Helper: fetch with timeout
 async function fetchWithTimeout(url, opts = {}, timeoutMs = 8000) {
@@ -42,6 +46,8 @@ function detectScriptHeuristic(text) {
     hiragana: /[\u3040-\u309F]/,
     katakana: /[\u30A0-\u30FF\u31F0-\u31FF]/,
     hangul: /[\u1100-\u11FF\u3130-\u318F\uAC00-\uD7AF]/,
+  hebrew: /[\u0590-\u05FF]/,
+  thai: /[\u0E00-\u0E7F]/,
     cjk: /[\u4E00-\u9FFF]/, // CJK Unified Ideographs
     bengali: /[\u0980-\u09FF]/,
     gurmukhi: /[\u0A00-\u0A7F]/,
@@ -92,6 +98,8 @@ function langToScripts(lang, text) {
     ml: 'Mlym',
     si: 'Sinh',
     ko: 'Hang',
+  he: 'Hebr',
+  th: 'Thai',
   };
   
   const akSrc = {
@@ -105,6 +113,8 @@ function langToScripts(lang, text) {
     kn: 'Kannada',
     ml: 'Malayalam',
     si: 'Sinhala',
+  he: null,
+  th: null,
   };
   
   return {
@@ -115,7 +125,7 @@ function langToScripts(lang, text) {
 }
 
 // Utility: split long text into chunks preserving lines, soft cap by characters
-function chunkText(text, maxLen = 700) {
+function chunkText(text, maxLen = 450) {
   const lines = (text || '').split(/\r?\n/);
   const chunks = [];
   let buf = '';
@@ -157,7 +167,7 @@ async function localRomanize(text, detectedLang) {
   const script = detectScriptHeuristic(text) || '';
   try {
     let out = null;
-    // Japanese kana => romaji
+  // Japanese kana => romaji
     if (script.includes('hiragana') || script.includes('katakana')) {
       if (toRomaji) out = toRomaji(text);
     } else if (script === 'cjk' || script === 'hiragana' || script === 'katakana') {
@@ -175,8 +185,20 @@ async function localRomanize(text, detectedLang) {
     } else if (script === 'arabic') {
       // Prefer Aksharamukha/OpenAI for Arabic-derived scripts; local lib not reliable
       out = null;
+    } else if (script === 'hangul') {
+      // Korean Hangul
+      if (koRomanizeMod) {
+        try {
+          const fn = koRomanizeMod.transliterate || koRomanizeMod.romanize || koRomanizeMod.default || null;
+          if (typeof fn === 'function') out = fn(text);
+        } catch (_) {}
+      }
     } else if (script === 'cyrillic' || script === 'greek') {
       if (transliterate) out = transliterate(text);
+    } else if (script === 'hebrew') {
+      if (typeof heTransliterate === 'function') {
+        try { out = heTransliterate(text); } catch (_) {}
+      }
     } else if (
       script === 'bengali' || script === 'gurmukhi' || script === 'gujarati' || script === 'tamil' ||
       script === 'telugu' || script === 'kannada' || script === 'malayalam' || script === 'sinhala' ||
