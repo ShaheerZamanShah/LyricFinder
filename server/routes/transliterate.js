@@ -24,6 +24,14 @@ async function fetchWithTimeout(url, opts = {}, timeoutMs = 8000) {
   }
 }
 
+// Normalize AI outputs that sometimes include code fences or extra prose
+function normalizeAIText(s) {
+  if (!s) return s;
+  const m = s.match(/```[a-zA-Z]*\n([\s\S]*?)```/);
+  const inner = m ? m[1] : s;
+  return inner.replace(/\r/g, '').trim();
+}
+
 // Heuristics: detect script by Unicode ranges (helps when external detect returns 'auto')
 function detectScriptHeuristic(text) {
   const ranges = {
@@ -243,7 +251,7 @@ async function libreTranslateTransliterate(text, detectedLang) {
     // This is translation, not transliteration; still acceptable as a final fallback
     // Avoid returning obvious error payloads
     if (out && /ERROR|EXCEEDED|INVALID/i.test(out)) return null;
-    return out;
+  return out;
   } catch (_) {
     return null;
   }
@@ -350,8 +358,8 @@ async function openAITransliterate(text, detectedLang) {
     }, 10000);
     if (!res.ok) throw new Error('OpenAI failed');
     const data = await res.json();
-    const out = data?.choices?.[0]?.message?.content;
-    return out && isRomanized(text, out) ? out.trim() : null;
+  const out = normalizeAIText(data?.choices?.[0]?.message?.content);
+  return out && isRomanized(text, out) ? out : null;
   } catch (_) {
     return null;
   }
@@ -362,17 +370,13 @@ async function transliterateWithFailover(text) {
   const detectedLang = await detectLanguage(text);
   const chunks = chunkText(text, 700);
 
-  // Provider priority: true transliteration first, then translations as last resort
+  // Provider priority: transliteration/romanization only (no translation fallbacks)
   const providers = [
     { name: 'Local', fn: localRomanize },
     { name: 'Aksharamukha', fn: aksharamukhaTransliterate },
     { name: 'OpenAI', fn: openAITransliterate },
     // Keep Microsoft in chain, but it will return null without keys
     { name: 'Microsoft', fn: microsoftTransliterate },
-    // Translations as last resorts
-    { name: 'LibreTranslate', fn: libreTranslateTransliterate },
-    { name: 'MyMemory', fn: myMemoryTransliterate },
-    { name: 'Lingva', fn: lingvaTransliterate },
   ];
 
   for (const p of providers) {
