@@ -154,9 +154,28 @@ const Home = ({ searchResult: externalResult, onSearchResults, onCollapseChange,
     // 7) Keep quoted lines readable: if a quote is followed immediately by a capital, insert a space (not a newline)
     text = text
       .replace(/(["”'])\s*([A-Z])/g, (m, q, cap) => `${q} ${cap}`)
-      .replace(/\)([A-Z])/g, ')\n$1');
+      // Do NOT force a newline after a closing parenthesis; prefer a space
+      .replace(/\)([A-Z])/g, ') $1');
 
-    // 8) Remove duplicate blank lines (keep max two)
+    // 7a) Parentheses normalization: repair line breaks and spacing around ( ... )
+    // - Bring lines like "word (\nContent)" back to "word (Content)"
+    // - Avoid spaces right inside parentheses and ensure one space before '(' when attached to a word
+    // - Ensure a space after ')' when followed by a word character
+    text = text
+      // If an opening parenthesis is at end of a line, pull next line up
+      .replace(/ \(\s*\n\s*/g, ' (')
+      // If a closing parenthesis starts a new line, pull it up
+      .replace(/\n\s*\)/g, ')')
+      // Ensure one space before '(' when attached to a non-space character (e.g., "love(" -> "love (")
+      .replace(/([^\s(])\(/g, '$1 (')
+      // Remove any extra spaces right after '('
+      .replace(/\(\s+/g, '(')
+      // Remove spaces before ')'
+      .replace(/\s+\)/g, ')')
+      // Ensure a single space after ')' when followed by a letter/number/quote (but not punctuation)
+      .replace(/\)(?=([A-Za-z0-9"“]))/g, ') ');
+
+  // 8) Remove duplicate blank lines (keep max two)
     text = text
       .replace(/\n{3,}/g, '\n\n')
       .trim();
@@ -167,7 +186,10 @@ const Home = ({ searchResult: externalResult, onSearchResults, onCollapseChange,
       .map((l) => l.replace(/\s+$/g, ''))
       .join('\n');
 
-    return text;
+  // Final pass: collapse multiple spaces introduced by the above rules
+  text = text.replace(/ {2,}/g, ' ');
+
+  return text;
   };
 
   // Parse featured artists from common title patterns: feat./ft./featuring ...
