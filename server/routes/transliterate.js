@@ -393,7 +393,7 @@ async function openAITransliterate(text, detectedLang) {
 async function transliterateWithFailover(text) {
   if (!text || !text.trim()) return { original: text, lang: null, result: text, provider: null };
   const detectedLang = await detectLanguage(text);
-  const chunks = chunkText(text, 700);
+  const chunks = chunkText(text);
 
   // Provider priority: transliteration first, then LibreTranslate translation as last resort
   const providers = [
