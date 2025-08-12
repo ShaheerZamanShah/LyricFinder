@@ -126,6 +126,16 @@ const Home = ({ searchResult: externalResult, onSearchResults, onCollapseChange,
       .replace(/[\t\f\v]+/g, ' ')
       .replace(/ {2,}/g, ' ');
 
+    // 3a) Fix jammed words where a lowercase letter is immediately followed by an uppercase letter (e.g., "meAt" -> "me At")
+    //     This is common in scraped lyrics where sentence breaks lose the space.
+    text = text.replace(/([a-z])([A-Z])/g, '$1 $2');
+
+    // 3b) Punctuation spacing: ensure no space before commas and exactly one space after (unless followed by newline or quote)
+    text = text
+      .replace(/\s+,/g, ',')
+      .replace(/,([^\s\n"”'])/g, ', $1')
+      .replace(/,(?=["“])/g, ', ');
+
     // 4) Ensure section headers have blank lines around them
     text = text
       .replace(/\s*\n\s*\[(.+?)\]\s*\n\s*/g, '\n\n[$1]\n')
@@ -141,9 +151,9 @@ const Home = ({ searchResult: externalResult, onSearchResults, onCollapseChange,
     // 6) Break after sentence punctuation when immediately followed by a capital letter with no space
     text = text.replace(/([.!?])(\s*)([A-Z])/g, (m, p1, p2, p3) => `${p1}${p2 && p2.length ? p2 : '\n'}${p3}`);
 
-    // 7) Break after closing quotes when next starts immediately
+    // 7) Keep quoted lines readable: if a quote is followed immediately by a capital, insert a space (not a newline)
     text = text
-      .replace(/(["”'])\s*([A-Z])/g, (m, q, cap) => `${q}\n${cap}`)
+      .replace(/(["”'])\s*([A-Z])/g, (m, q, cap) => `${q} ${cap}`)
       .replace(/\)([A-Z])/g, ')\n$1');
 
     // 8) Remove duplicate blank lines (keep max two)
