@@ -6,7 +6,6 @@ import { useTheme } from '../contexts/ThemeContext';
 import useSpotify from '../hooks/useSpotify';
 import { API_ENDPOINTS } from '../config/api';
 import SongDetails from '../components/SongDetails';
-import PopularityMeter from '../components/PopularityMeter';
 
 const Home = ({ searchResult: externalResult, onSearchResults, onCollapseChange, isSearchCollapsed, onCoverColorChange }) => {
   const [searchResult, setSearchResult] = useState(externalResult || null);
@@ -26,7 +25,7 @@ const Home = ({ searchResult: externalResult, onSearchResults, onCollapseChange,
   const searchContainerRef = useRef(null);
 
   // Fallback cover used when recommendation thumbnails fail
-  const FALLBACK_COVER = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNjQiIGhlaWdodD0iNjQiIHZpZXdCb3g9IjAgMCA2NCA2NCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHJlY3Qgd2lkdGg9IjY0IiBoZWlnaHQ9IjY0IiBmaWxsPSIjMzMzIi8+Cjx0ZXh0IHg9IjMyIiB5PSI0MCIgdGV4dC1hbmNob3I9Im1pZGRsZSIgZmlsbD0iIzY2NiIgZm9udC1zaXplPSIyNCIgZm9udC1mYW1pbHk9IkFyaWFsIj7imaE8L3RleHQ+Cjwvc3ZnPg==';
+  const FALLBACK_COVER = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNjQiIGhlaWdodD0iNjQiIHZpZXdCb3g9IjAgMCA2NCA2NCIgZmlsbD0ibm9uZSIgeG1zbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHJlY3Qgd2lkdGg9IjY0IiBoZWlnaHQ9IjY0IiBmaWxsPSIjMzMzIi8+Cjx0ZXh0IHg9IjMyIiB5PSI0MCIgdGV4dC1hbmNob3I9Im1pZGRsZSIgZmlsbD0iIzY2NiIgZm9udC1zaXplPSIyNCIgZm9udC1mYW1pbHk9IkFyaWFsIj7imaE8L3RleHQ+Cjwvc3ZnPg==';
 
   // Dominant color extracted from the main album cover
   const [coverColor, setCoverColor] = useState(null);
@@ -935,7 +934,7 @@ const Home = ({ searchResult: externalResult, onSearchResults, onCollapseChange,
             }`}>
               {/* Album Art & Song Info */}
               <div className="flex flex-col items-center gap-4">
-                <div className="w-full flex flex-col md:flex-row items-center md:items-start justify-center gap-4">
+                <div className="w-full flex items-start justify-center gap-4">
                   <div 
                     className="relative group cursor-pointer"
                     onClick={(e) => {
@@ -968,16 +967,7 @@ const Home = ({ searchResult: externalResult, onSearchResults, onCollapseChange,
                         }}
                       />
                     </div>
-                  {/* Popularity + Vibe: below on small, right on md+ */}
-                  {searchResult?.song && (
-                    <div className="w-full md:w-auto">
-                      <PopularityMeter 
-                        songId={searchResult.song.spotify_id}
-                        title={searchResult.song.title}
-                        artist={searchResult.song.artist}
-                      />
-                    </div>
-                  )}
+                    
                     {/* Play/Pause Overlay */}
                     {searchResult.song.preview_url && (
                       <div className={`absolute inset-0 flex items-center justify-center rounded-full transition-opacity duration-300 pointer-events-none ${
