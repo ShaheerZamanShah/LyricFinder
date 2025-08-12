@@ -235,12 +235,17 @@ const Home = ({ searchResult: externalResult, onSearchResults, onCollapseChange,
       });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = await res.json();
-      if (data && data.result) {
-        setTransliteratedLyrics(normalizeLyrics(data.result));
-        setTransliterationMeta({ lang: data.lang || null, provider: data.provider || null, error: null });
-        setIsTransliterateActive(true);
+      const original = (searchResult?.song?.lyrics || '').trim();
+      const returned = (data?.result || '').trim();
+      const provider = data?.provider || null;
+      if (!returned || !provider || provider === 'none' || returned === original) {
+        setTransliterationMeta({ lang: data?.lang || null, provider: provider, error: 'No transliteration available' });
+        setIsTransliterateActive(false);
+        setTransliteratedLyrics(null);
       } else {
-        setTransliterationMeta({ lang: data?.lang || null, provider: data?.provider || null, error: 'No result' });
+        setTransliteratedLyrics(normalizeLyrics(returned));
+        setTransliterationMeta({ lang: data.lang || null, provider: provider, error: null });
+        setIsTransliterateActive(true);
       }
     } catch (e) {
       setTransliterationMeta((m) => ({ ...m, error: e?.message || 'Transliteration failed' }));
