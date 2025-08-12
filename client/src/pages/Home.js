@@ -20,6 +20,12 @@ const Home = ({ searchResult: externalResult, onSearchResults, onCollapseChange,
   const [showTagline, setShowTagline] = useState(false);
   const [fadeOut, setFadeOut] = useState(false);
   const [isLyricsModalOpen, setIsLyricsModalOpen] = useState(false);
+  // Transliteration UI state
+  const [isTransliterateEligible, setIsTransliterateEligible] = useState(false);
+  const [isTransliterateActive, setIsTransliterateActive] = useState(false);
+  const [isTransliterateLoading, setIsTransliterateLoading] = useState(false);
+  const [transliteratedLyrics, setTransliteratedLyrics] = useState(null);
+  const [transliterationMeta, setTransliterationMeta] = useState({ lang: null, provider: null, error: null });
   const { theme } = useTheme();
   const { getRecommendations } = useSpotify();
   const searchContainerRef = useRef(null);
@@ -192,6 +198,57 @@ const Home = ({ searchResult: externalResult, onSearchResults, onCollapseChange,
   return text;
   };
 
+  // Heuristic: determine if lyrics likely contain non-Latin script (so transliteration is useful)
+  const isLikelyNonLatin = (txt) => {
+    if (!txt) return false;
+    const sample = txt.slice(0, 4000); // limit for perf
+    const total = sample.length;
+    if (total < 20) return false;
+    const nonAscii = (sample.match(/[^\x00-\x7F]/g) || []).length;
+    // Eligible if > 3% non-ASCII characters
+    return nonAscii / total > 0.03;
+  };
+
+  const resetTransliteration = () => {
+    setIsTransliterateActive(false);
+    setIsTransliterateLoading(false);
+    setTransliteratedLyrics(null);
+    setTransliterationMeta({ lang: null, provider: null, error: null });
+  };
+
+  const updateTransliterationEligibility = (lyrics) => {
+    const eligible = isLikelyNonLatin(lyrics);
+    setIsTransliterateEligible(eligible);
+    // If lyrics changed, clear previous transliteration
+    resetTransliteration();
+  };
+
+  const requestTransliteration = async () => {
+    if (!searchResult?.song?.lyrics) return;
+    try {
+      setIsTransliterateLoading(true);
+          setTransliterationMeta({ lang: null, provider: null, error: null });
+      const res = await fetch(API_ENDPOINTS.TRANSLITERATE, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ text: searchResult?.song?.lyrics }),
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data = await res.json();
+      if (data && data.result) {
+        setTransliteratedLyrics(normalizeLyrics(data.result));
+        setTransliterationMeta({ lang: data.lang || null, provider: data.provider || null, error: null });
+        setIsTransliterateActive(true);
+      } else {
+        setTransliterationMeta({ lang: data?.lang || null, provider: data?.provider || null, error: 'No result' });
+      }
+    } catch (e) {
+      setTransliterationMeta((m) => ({ ...m, error: e?.message || 'Transliteration failed' }));
+    } finally {
+      setIsTransliterateLoading(false);
+    }
+  };
+
   // Parse featured artists from common title patterns: feat./ft./featuring ...
   const parseFeaturedArtists = (title = '') => {
     if (!title || typeof title !== 'string') return [];
@@ -322,12 +379,13 @@ const Home = ({ searchResult: externalResult, onSearchResults, onCollapseChange,
     }
     
     // Minimal processing for fastest display
-    if (result && result.song) {
+  if (result && result.song) {
       if (!result.song.artist_bio) {
         result.song.artist_bio = `${result.song.artist} is a talented artist known for their distinctive style and memorable songs.`;
       }
       if (result.song.lyrics) {
         result.song.lyrics = normalizeLyrics(result.song.lyrics);
+        updateTransliterationEligibility(result.song.lyrics);
       }
         // Attach featured artists from structured data if available, else parse title
         if (Array.isArray(result.song.artists) && result.song.artists.length > 1) {
@@ -629,7 +687,7 @@ const Home = ({ searchResult: externalResult, onSearchResults, onCollapseChange,
     }
     
     try {
-      const response = await fetch(API_ENDPOINTS.SEARCH_LYRICS, {
+  const response = await fetch(API_ENDPOINTS.SEARCH_LYRICS, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -658,6 +716,7 @@ const Home = ({ searchResult: externalResult, onSearchResults, onCollapseChange,
           }
           if (result.song.lyrics) {
             result.song.lyrics = normalizeLyrics(result.song.lyrics);
+            updateTransliterationEligibility(result.song.lyrics);
           }
           // Attach featured artists from structured data if available, else parse title
           if (Array.isArray(result.song.artists) && result.song.artists.length > 1) {
@@ -1179,8 +1238,7 @@ const Home = ({ searchResult: externalResult, onSearchResults, onCollapseChange,
               {/* Lyrics Display */}
               {searchResult.song.lyrics && (
                 <div 
-                  onClick={() => setIsLyricsModalOpen(true)}
-                  className={`rounded-2xl p-6 shadow-md max-h-96 overflow-y-auto transition-all duration-300 cursor-pointer hover:shadow-lg hover:scale-[1.02] mt-6 ${
+                  className={`relative rounded-2xl p-6 shadow-md max-h-96 overflow-y-auto transition-all duration-300 mt-6 ${
                     coverColor
                       ? (theme === 'light' 
                         ? 'custom-scrollbar-light' 
@@ -1197,6 +1255,40 @@ const Home = ({ searchResult: externalResult, onSearchResults, onCollapseChange,
                   }`}
                   style={coverColor ? { background: getLyricsBackground(coverColor, theme) } : undefined}
                 >
+                  {/* Top-right controls */}
+                  <div className="absolute right-3 top-3 flex items-center gap-2">
+                    {isTransliterateEligible && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (isTransliterateActive) {
+                            setIsTransliterateActive(false);
+                          } else if (!transliteratedLyrics && !isTransliterateLoading) {
+                            requestTransliteration();
+                          } else {
+                            setIsTransliterateActive(true);
+                          }
+                        }}
+                        disabled={isTransliterateLoading}
+                        className={`text-xs px-3 py-1.5 rounded-full border backdrop-blur-sm ${
+                          theme === 'light' ? 'bg-white/20 border-white/30 text-white hover:bg-white/30' : 'bg-black/20 border-white/20 text-indigo-100 hover:bg-black/30'
+                        } ${isTransliterateActive ? 'ring-2 ring-indigo-400/60' : ''}`}
+                        title={isTransliterateActive ? 'Show original lyrics' : 'Transliterate to Latin script'}
+                      >
+                        {isTransliterateLoading ? 'Transliterating…' : (isTransliterateActive ? 'Original' : 'Transliterate')}
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => setIsLyricsModalOpen(true)}
+                      className={`text-xs px-3 py-1.5 rounded-full border backdrop-blur-sm ${
+                        theme === 'light' ? 'bg-white/20 border-white/30 text-white hover:bg-white/30' : 'bg-black/20 border-white/20 text-indigo-100 hover:bg-black/30'
+                      }`}
+                      title="Open full lyrics"
+                    >
+                      Expand
+                    </button>
+                  </div>
                   <h3 className={`text-lg font-semibold mb-4 flex items-center gap-2 ${
                     theme === 'light' ? 'text-white' : 'text-gray-100'
                   }`}>
@@ -1206,8 +1298,16 @@ const Home = ({ searchResult: externalResult, onSearchResults, onCollapseChange,
                   <pre className={`whitespace-pre-wrap font-mono text-lg leading-relaxed pb-3 ${
                     theme === 'light' ? 'text-gray-100' : 'text-gray-100'
                   }`}>
-                    {searchResult.song.lyrics}
+                    {isTransliterateActive && transliteratedLyrics ? transliteratedLyrics : searchResult.song.lyrics}
                   </pre>
+                  {isTransliterateActive && (transliterationMeta.lang || transliterationMeta.provider) && (
+                    <div className={`text-xs opacity-80 mt-2 ${theme === 'light' ? 'text-white/80' : 'text-indigo-100/80'}`}>
+                      {transliterationMeta.lang && <span>Detected: {transliterationMeta.lang}</span>}
+                      {transliterationMeta.lang && transliterationMeta.provider && <span> · </span>}
+                      {transliterationMeta.provider && <span>Provider: {transliterationMeta.provider}</span>}
+                      {transliterationMeta.error && <span> · Error: {transliterationMeta.error}</span>}
+                    </div>
+                  )}
                 </div>
               )}
 
@@ -1374,8 +1474,16 @@ const Home = ({ searchResult: externalResult, onSearchResults, onCollapseChange,
               <pre className={`whitespace-pre-wrap font-mono text-lg leading-relaxed ${
                 theme === 'light' ? 'text-gray-800' : 'text-gray-200'
               }`}>
-                {searchResult.song.lyrics}
+                {isTransliterateActive && transliteratedLyrics ? transliteratedLyrics : searchResult.song.lyrics}
               </pre>
+              {isTransliterateActive && (transliterationMeta.lang || transliterationMeta.provider) && (
+                <div className={`text-xs opacity-80 mt-2 ${theme === 'light' ? 'text-gray-700' : 'text-gray-400'}`}>
+                  {transliterationMeta.lang && <span>Detected: {transliterationMeta.lang}</span>}
+                  {transliterationMeta.lang && transliterationMeta.provider && <span> · </span>}
+                  {transliterationMeta.provider && <span>Provider: {transliterationMeta.provider}</span>}
+                  {transliterationMeta.error && <span> · Error: {transliterationMeta.error}</span>}
+                </div>
+              )}
             </div>
           </div>
         </div>

@@ -24,6 +24,7 @@ export const API_ENDPOINTS = {
   SPOTIFY_RECOMMENDATIONS: `${API_BASE_URL}/api/spotify/recommendations`,
   SPOTIFY_AUDIO_FEATURES: `${API_BASE_URL}/api/spotify/audio-features`,
   YOUTUBE_LINK: `${API_BASE_URL}/api/youtube/link`,
+  TRANSLITERATE: `${API_BASE_URL}/api/transliterate`,
 };
 
 export default API_CONFIG;
