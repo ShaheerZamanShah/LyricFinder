@@ -96,31 +96,68 @@ const Home = ({ searchResult: externalResult, onSearchResults, onCollapseChange,
     return `linear-gradient(135deg, ${rgba(color, a1)} 0%, ${rgba(darken, a2)} 100%)`;
   };
 
-  // Fast, robust lyrics cleaner. Removes pre-lyrics clutter and normalizes spacing/sections.
+  // Robust lyrics normalizer: strips site boilerplate, restores line breaks, and formats sections.
   const normalizeLyrics = (raw) => {
     if (!raw || typeof raw !== 'string') return '';
-    let text = raw.replace(/\r\n?/g, '\n');
-
-    // Remove common pre/post clutter
-    // - Leading/trailing whitespace
-    // - "Lyrics" headers, timestamps, or trailing "Embed" markers
-    text = text
-      .replace(/^\s*lyrics\s*$/gim, '')
-      .replace(/^\s*([0-9]{1,2}:[0-9]{2})\s*$/gim, '')
-      .replace(/\n?\s*\d+embed\s*$/i, '')
-      .replace(/\u200B|\uFEFF/g, '')
+    let text = raw
+      .replace(/\r\n?/g, '\n')
+      .replace(/[\u200B\u200C\u200D\uFEFF]/g, '') // zero-width chars
       .trim();
 
-    // Ensure section headers like [Chorus] or (Chorus) have spacing around them
+    // 1) Remove obvious non-lyrics boilerplate lines
+    const boilerplatePatterns = [
+      /^\s*\d+\s*Contributors?.*$/gim,
+      /^\s*Translations?\b.*$/gim,
+      /^\s*About this song.*$/gim,
+      /^\s*Genius\s*Annotation.*$/gim,
+      /^\s*Produced by.*$/gim,
+      /^\s*\d+\s*Embed\s*$/gim,
+    ];
+    boilerplatePatterns.forEach((re) => { text = text.replace(re, ''); });
+
+    // 2) If a clear section header exists, drop anything before the first one
+    const headerMatch = text.match(/\[(?:intro|verse|chorus|bridge|outro|pre-chorus|post-chorus|hook|refrain)[^\]]*\]/i);
+    if (headerMatch && headerMatch.index != null) {
+      text = text.slice(headerMatch.index);
+    }
+
+    // 3) Normalize spaces
+    text = text
+      .replace(/[\t\f\v]+/g, ' ')
+      .replace(/ {2,}/g, ' ');
+
+    // 4) Ensure section headers have blank lines around them
+    text = text
+      .replace(/\s*\n\s*\[(.+?)\]\s*\n\s*/g, '\n\n[$1]\n')
+      .replace(/(?<!\n)\[(.+?)\]/g, '\n\n[$1]');
+
+    // 5) Repair jammed lines: insert newlines before common leading tokens when glued
+    const breakTokens = ['But','And','Oh','Ooh','Uh','Hey','I','We','You','She','He','They','Girl','Boy','Yeah','No'];
+    for (const tok of breakTokens) {
+      const re = new RegExp(`(\\S)(${tok}\\b)`, 'g');
+      text = text.replace(re, '$1\n$2');
+    }
+
+    // 6) Break after sentence punctuation when immediately followed by a capital letter with no space
+    text = text.replace(/([.!?])(\s*)([A-Z])/g, (m, p1, p2, p3) => `${p1}${p2 && p2.length ? p2 : '\n'}${p3}`);
+
+    // 7) Break after closing quotes when next starts immediately
+    text = text
+      .replace(/(["”'])\s*([A-Z])/g, (m, q, cap) => `${q}\n${cap}`)
+      .replace(/\)([A-Z])/g, ')\n$1');
+
+    // 8) Remove duplicate blank lines (keep max two)
     text = text
       .replace(/\n{3,}/g, '\n\n')
-      .replace(/\s*\n\s*\[(.+?)\]\s*\n\s*/g, '\n\n[$1]\n')
-      .replace(/\s*\n\s*\((.+?:?)\)\s*\n\s*/g, '\n\n($1)\n');
+      .trim();
 
-    // Collapse runs of blank lines to max 2
-    text = text.replace(/\n{3,}/g, '\n\n');
+    // 9) Trim trailing spaces on each line
+    text = text
+      .split('\n')
+      .map((l) => l.replace(/\s+$/g, ''))
+      .join('\n');
 
-    return text.trim();
+    return text;
   };
 
   // Parse featured artists from common title patterns: feat./ft./featuring ...
