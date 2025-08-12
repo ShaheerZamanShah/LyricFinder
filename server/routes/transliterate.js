@@ -31,7 +31,8 @@ async function fetchWithTimeout(url, opts = {}, timeoutMs = 8000) {
 // Normalize AI outputs that sometimes include code fences or extra prose
 function normalizeAIText(s) {
   if (!s) return s;
-  const m = s.match(/```[a-zA-Z]*\n([\s\S]*?)```/);
+  // Remove code fences and extract content
+  const m = s.match(/```[a-zA-Z]*\n([\s\S]*?)\n```/);
   const inner = m ? m[1] : s;
   return inner.replace(/\r/g, '').trim();
 }
@@ -83,6 +84,8 @@ function langToScripts(lang, text) {
     scriptHint === 'cjk' ? 'zh' :
     scriptHint === 'cyrillic' ? 'ru' :
     scriptHint === 'greek' ? 'el' :
+    scriptHint === 'hebrew' ? 'he' :
+    scriptHint === 'thai' ? 'th' :
     'auto'
   );
   
@@ -392,13 +395,13 @@ async function transliterateWithFailover(text) {
   const detectedLang = await detectLanguage(text);
   const chunks = chunkText(text, 700);
 
-  // Provider priority: transliteration/romanization only (no translation fallbacks)
+  // Provider priority: transliteration first, then LibreTranslate translation as last resort
   const providers = [
     { name: 'Local', fn: localRomanize },
     { name: 'Aksharamukha', fn: aksharamukhaTransliterate },
     { name: 'OpenAI', fn: openAITransliterate },
-    // Keep Microsoft in chain, but it will return null without keys
-    { name: 'Microsoft', fn: microsoftTransliterate },
+    // Microsoft intentionally omitted (no keys provided)
+    { name: 'LibreTranslate', fn: libreTranslateTransliterate },
   ];
 
   for (const p of providers) {
