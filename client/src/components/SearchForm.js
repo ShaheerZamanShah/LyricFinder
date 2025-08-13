@@ -1,17 +1,17 @@
+/* eslint-disable no-unused-vars */
 import React, { useState, useEffect, useRef } from 'react';
 import { Search, Loader2, X } from 'lucide-react';
 import { useTheme } from '../contexts/ThemeContext';
-// import SearchSuggestions from './SearchSuggestions';
 import { API_ENDPOINTS } from '../config/api';
 
-const SearchForm = ({ onSearchResults, onCollapseChange, isHeaderSearch = false }) => {
+const SearchForm = ({ onSearchResults, onCollapseChange = () => {}, isHeaderSearch = false }) => {
   const [query, setQuery] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const [isCollapsed, setIsCollapsed] = useState(false);
+  // Removed unused collapsed state (parent controls collapse)
   const [suggestions, setSuggestions] = useState([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [isFocused, setIsFocused] = useState(false);
-  const [isMinimized, setIsMinimized] = useState(false);
+  // Removed unused minimized state (UI no longer depends on it)
   const { theme } = useTheme();
   const searchTimeoutRef = useRef(null);
   const formRef = useRef(null);
@@ -116,8 +116,6 @@ const SearchForm = ({ onSearchResults, onCollapseChange, isHeaderSearch = false 
         const data = await response.json();
         onSearchResults(data);
         if (!isHeaderSearch) {
-          setIsCollapsed(true);
-          setIsMinimized(true);
           onCollapseChange(true);
         }
       } else {
@@ -155,8 +153,6 @@ const SearchForm = ({ onSearchResults, onCollapseChange, isHeaderSearch = false 
         const data = await response.json();
         onSearchResults(data);
         if (!isHeaderSearch) {
-          setIsCollapsed(true);
-          setIsMinimized(true);
           onCollapseChange(true);
         }
       } else {
@@ -178,27 +174,9 @@ const SearchForm = ({ onSearchResults, onCollapseChange, isHeaderSearch = false 
     inputRef.current?.focus();
   };
 
-  const expandSearch = () => {
-    setIsMinimized(false);
-    setIsFocused(true);
-    // Small delay to ensure the input is rendered before focusing
-    setTimeout(() => {
-      inputRef.current?.focus();
-    }, 100);
-  };
+  // Removed unused expandSearch helper
 
-  const getInputStyles = () => {
-    switch (theme) {
-      case 'light':
-        return 'bg-white/95 border-blue-400/60 text-gray-900 placeholder-gray-500 focus:border-blue-500 shadow-lg';
-      case 'medium':
-        return 'bg-gray-800/95 border-purple-400/60 text-white placeholder-gray-400 focus:border-purple-400 shadow-lg shadow-purple-500/20';
-      case 'dark':
-        return 'bg-gray-900/95 border-red-400/60 text-white placeholder-gray-400 focus:border-red-400 shadow-lg shadow-red-500/20';
-      default:
-        return 'bg-white/95 border-blue-400/60 text-gray-900 placeholder-gray-500 focus:border-blue-500 shadow-lg';
-    }
-  };
+  // Removed unused getInputStyles helper
 
   const getSearchButtonStyles = () => {
     if (!query.trim()) {

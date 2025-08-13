@@ -1,0 +1,16 @@
+{
+  "watch": [
+    "server.js",
+    "routes",
+    "models"
+  ],
+  "ignore": [
+    "../client/**",
+    "client/**",
+    "node_modules/**",
+    "*.log"
+  ],
+  "ext": "js,json",
+  "delay": "3000",
+  "legacyWatch": true
+}

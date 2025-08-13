@@ -19,8 +19,6 @@ export const API_ENDPOINTS = {
   GENIUS_DETAILS: `${API_BASE_URL}/api/lyrics/details`,
   SONGS: `${API_BASE_URL}/api/songs`,
   LASTFM_ARTIST: `${API_BASE_URL}/api/lastfm/artist`,
-  LASTFM_TRACK: `${API_BASE_URL}/api/lastfm/track`,
-  LASTFM_TRACK: `${API_BASE_URL}/api/lastfm/track`,
   SPOTIFY_AUTH: `${API_BASE_URL}/api/spotify/auth`,
   SPOTIFY_CALLBACK: `${API_BASE_URL}/api/spotify/callback`,
   SPOTIFY_RECOMMENDATIONS: `${API_BASE_URL}/api/spotify/recommendations`,
@@ -28,6 +26,7 @@ export const API_ENDPOINTS = {
   SPOTIFY_PLAYCOUNT: `${API_BASE_URL}/api/spotify/playcount`,
   YOUTUBE_LINK: `${API_BASE_URL}/api/youtube/link`,
   TRANSLITERATE: `${API_BASE_URL}/api/transliterate`,
+  RATINGS: `${API_BASE_URL}/api/ratings`,
 };
 
 export default API_CONFIG;

@@ -1,3 +1,4 @@
+/* eslint-disable no-control-regex */
 import React, { useState, useEffect, useRef } from 'react';
 import SearchForm from '../components/SearchForm';
 import ArtistSection from '../components/ArtistSection';
@@ -5,6 +6,7 @@ import { Music, Play, Pause, ExternalLink } from 'lucide-react';
 import { useTheme } from '../contexts/ThemeContext';
 import useSpotify from '../hooks/useSpotify';
 import { API_ENDPOINTS } from '../config/api';
+import RatingControl from '../components/RatingControl';
 import SongDetails from '../components/SongDetails';
 
 const Home = ({ searchResult: externalResult, onSearchResults, onCollapseChange, isSearchCollapsed, onCoverColorChange }) => {
@@ -122,7 +124,7 @@ const Home = ({ searchResult: externalResult, onSearchResults, onCollapseChange,
     boilerplatePatterns.forEach((re) => { text = text.replace(re, ''); });
 
     // 2) If a clear section header exists, drop anything before the first one
-    const headerMatch = text.match(/\[(?:intro|verse|chorus|bridge|outro|pre-chorus|post-chorus|hook|refrain)[^\]]*\]/i);
+  const headerMatch = text.match(/\[(?:intro|verse|chorus|bridge|outro|pre-chorus|post-chorus|hook|refrain)[^]]*\]/i);
     if (headerMatch && headerMatch.index != null) {
       text = text.slice(headerMatch.index);
     }
@@ -136,16 +138,19 @@ const Home = ({ searchResult: externalResult, onSearchResults, onCollapseChange,
     //     This is common in scraped lyrics where sentence breaks lose the space.
     text = text.replace(/([a-z])([A-Z])/g, '$1 $2');
 
-    // 3b) Punctuation spacing: ensure no space before commas and exactly one space after (unless followed by newline or quote)
+    // 3b) Punctuation spacing: ensure no space before commas and add a space after if not followed by whitespace/newline/end
     text = text
       .replace(/\s+,/g, ',')
-      .replace(/,([^\s\n"”'])/g, ', $1')
-      .replace(/,(?=["“])/g, ', ');
+      .replace(/,(?!\s|\n|$)/g, ', ');
 
     // 4) Ensure section headers have blank lines around them
     text = text
-      .replace(/\s*\n\s*\[(.+?)\]\s*\n\s*/g, '\n\n[$1]\n')
-      .replace(/(?<!\n)\[(.+?)\]/g, '\n\n[$1]');
+  .replace(/\s*\n\s*\[(.+?)\]\s*\n\s*/g, '\n\n[$1]\n');
+    // Add blank lines before headers if missing (without lookbehind)
+    text = text.replace(/\[(.+?)\]/g, (m, p1, offset, str) => {
+      if (offset > 0 && str[offset - 1] !== '\n') return `\n\n[${p1}]`;
+      return `[${p1}]`;
+    });
 
     // 5) Repair jammed lines: insert newlines before common leading tokens when glued
     const breakTokens = ['But','And','Oh','Ooh','Uh','Hey','I','We','You','She','He','They','Girl','Boy','Yeah','No'];
@@ -161,7 +166,7 @@ const Home = ({ searchResult: externalResult, onSearchResults, onCollapseChange,
     text = text
       .replace(/(["”'])\s*([A-Z])/g, (m, q, cap) => `${q} ${cap}`)
       // Do NOT force a newline after a closing parenthesis; prefer a space
-      .replace(/\)([A-Z])/g, ') $1');
+      .replace(/[)]([A-Z])/g, ') $1');
 
     // 7a) Parentheses normalization: repair line breaks and spacing around ( ... )
     // - Bring lines like "word (\nContent)" back to "word (Content)"
@@ -204,7 +209,12 @@ const Home = ({ searchResult: externalResult, onSearchResults, onCollapseChange,
     const sample = txt.slice(0, 4000); // limit for perf
     const total = sample.length;
     if (total < 20) return false;
-    const nonAscii = (sample.match(/[^\x00-\x7F]/g) || []).length;
+    // Count non-ASCII without a control-character regex to satisfy linter
+    let nonAscii = 0;
+    for (let i = 0; i < sample.length; i++) {
+      const code = sample.charCodeAt(i);
+      if (code > 0x7F) nonAscii++;
+    }
     // Eligible if > 3% non-ASCII characters
     return nonAscii / total > 0.03;
   };
@@ -258,9 +268,10 @@ const Home = ({ searchResult: externalResult, onSearchResults, onCollapseChange,
   const parseFeaturedArtists = (title = '') => {
     if (!title || typeof title !== 'string') return [];
     const patterns = [
-      /\((?:feat\.|featuring|ft\.)\s*([^\)]+)\)/i,
-      /-\s*(?:feat\.|featuring|ft\.)\s*([^\-]+)$/i,
-      /(?:feat\.|featuring|ft\.)\s*([^\(\-\[]+)/i,
+      /(\((?:feat\.|featuring|ft\.)\s*([^)]+)\))/i,
+      (/-\s*(?:feat\.|featuring|ft\.)\s*([^-]+)$/i),
+      // eslint-disable-next-line no-useless-escape
+      (/(?:feat\.|featuring|ft\.)\s*([^()\[\]-]+)$/i),
     ];
     let names = [];
     for (const re of patterns) {
@@ -268,7 +279,7 @@ const Home = ({ searchResult: externalResult, onSearchResults, onCollapseChange,
       if (m && m[1]) {
         names = m[1]
           .split(/,|&|x|\+|\band\b/i)
-          .map(s => s.replace(/[\[\](){}]/g, '').trim())
+          .map(s => s.replace(/[()[\]{}]/g, '').trim())
           .filter(Boolean);
         break;
       }
@@ -1196,14 +1207,14 @@ const Home = ({ searchResult: externalResult, onSearchResults, onCollapseChange,
                       </div>
                     )}
                   </div>
-          {typeof searchResult?.song?.popularity === 'number' && (
-                    <div className={`text-xs mt-1 ${theme === 'light' ? 'text-gray-600' : 'text-gray-300'}`}>
-            Popularity: {Math.max(0, Math.min(100, Number(searchResult.song.popularity)))}
-                    </div>
-                  )}
                   <span className={`text-md font-medium ${
                     theme === 'light' ? 'text-gray-700' : 'text-indigo-400'
                   }`}>{searchResult.song.artist}</span>
+                  {typeof searchResult?.song?.popularity === 'number' && (
+                    <div className={`text-xs mt-1 ${theme === 'light' ? 'text-gray-600' : 'text-gray-300'}`}>
+                      Popularity: {Math.max(0, Math.min(100, Number(searchResult.song.popularity)))}
+                    </div>
+                  )}
                   {collaboratorNames.length > 0 && (
                     <div className={`text-xs mt-0.5 ${theme === 'light' ? 'text-gray-600' : 'text-gray-300'}`}>
                       with {collaboratorNames.join(', ')}
@@ -1217,7 +1228,7 @@ const Home = ({ searchResult: externalResult, onSearchResults, onCollapseChange,
                 </div>
 
                 {/* Action Buttons */}
-                <div className="flex flex-wrap gap-3 mt-4 justify-center">
+                <div className="flex flex-wrap gap-3 mt-4 justify-center items-center">
                   {/* YouTube button (direct link if available, else search) */}
                   {searchResult.song.youtube_url ? (
                     <a 
@@ -1271,6 +1282,9 @@ const Home = ({ searchResult: externalResult, onSearchResults, onCollapseChange,
                       Spotify
                     </a>
                   )}
+
+                  {/* Rating control (to the right of the Spotify link) */}
+                  <RatingControl song={searchResult.song} />
 
                   {/* Open in New Tab Button for External Links */}
                   {(searchResult.song.external_url || searchResult.song.genius_url) && (

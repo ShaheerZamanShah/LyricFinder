@@ -40,6 +40,7 @@ app.use('/api/spotify', require('./routes/spotify'));
 app.use('/api/lastfm', require('./routes/lastfm'));
 app.use('/api/youtube', require('./routes/youtube'));
 app.use('/api/transliterate', require('./routes/transliterate'));
+app.use('/api/ratings', require('./routes/ratings'));
 
 // Error handling middleware
 app.use((err, req, res, next) => {

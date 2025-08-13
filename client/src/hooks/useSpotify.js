@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { API_ENDPOINTS } from '../config/api';
+import { API_BASE_URL, API_ENDPOINTS } from '../config/api';
 import SpotifyWebApi from 'spotify-web-api-js';
 
 const spotifyApi = new SpotifyWebApi();
@@ -8,8 +8,7 @@ const useSpotify = () => {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [accessToken, setAccessToken] = useState(null);
 
-  // Client ID for public search (secret is on server)
-  const CLIENT_ID = '9124e833ec0b41559b46312aaed4c3c5';
+  // Note: public client id not used here; server proxies Spotify calls
 
   useEffect(() => {
     // Get access token from URL if redirected from Spotify
@@ -34,7 +33,7 @@ const useSpotify = () => {
 
   const getClientCredentialsToken = async () => {
     try {
-      const response = await fetch(`${API_ENDPOINTS.BASE_URL}/api/spotify/token`, {
+  const response = await fetch(`${API_BASE_URL}/api/spotify/token`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
@@ -53,7 +52,7 @@ const useSpotify = () => {
   };
 
   const authorizeUser = () => {
-    const CLIENT_ID = '9124e833ec0b41559b46312aaed4c3c5';
+    const clientId = '9124e833ec0b41559b46312aaed4c3c5';
     const REDIRECT_URI = `${window.location.origin}/callback`;
     const scopes = [
       'user-read-currently-playing',
@@ -63,7 +62,7 @@ const useSpotify = () => {
       'playlist-read-collaborative'
     ];
 
-    window.location.href = `https://accounts.spotify.com/authorize?client_id=${CLIENT_ID}&redirect_uri=${REDIRECT_URI}&scope=${scopes.join('%20')}&response_type=token&show_dialog=true`;
+  window.location.href = `https://accounts.spotify.com/authorize?client_id=${clientId}&redirect_uri=${REDIRECT_URI}&scope=${scopes.join('%20')}&response_type=token&show_dialog=true`;
   };
 
   const searchSpotifyTracks = async (query) => {
