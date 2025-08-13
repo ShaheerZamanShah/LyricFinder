@@ -413,21 +413,17 @@ const Home = ({ searchResult: externalResult, onSearchResults, onCollapseChange,
        onCoverColorChange?.(null);
      }
 
-  // Fetch accurate Spotify streams if we have a user token and spotify_id; otherwise, do not show streams
+      // Fetch Spotify popularity via backend when we have a spotify_id
       ;(async () => {
         try {
-          // If we have a Spotify token cached and spotify_id, ask backend for accurate playcount
-          const webToken = window.localStorage.getItem('spotify_token');
-          if (webToken && result.song.spotify_id) {
-            const resp = await fetch(`${API_ENDPOINTS.SPOTIFY_PLAYCOUNT}?track_id=${encodeURIComponent(result.song.spotify_id)}`, {
-              headers: { Authorization: `Bearer ${webToken}` }
-            });
+          if (result.song.spotify_id) {
+            const resp = await fetch(`${API_ENDPOINTS.SPOTIFY_AUDIO_FEATURES}?track_id=${encodeURIComponent(result.song.spotify_id)}`);
             if (resp.ok) {
               const json = await resp.json();
-              if (typeof json?.playcount === 'number') {
-        result.song.spotify_streams = json.playcount;
+              if (typeof json?.popularity === 'number') {
+                result.song.popularity = json.popularity;
                 setSearchResult({ ...result });
-                return; // prefer Spotify count
+                return;
               }
             }
           }
@@ -1175,9 +1171,9 @@ const Home = ({ searchResult: externalResult, onSearchResults, onCollapseChange,
                       </div>
                     )}
                   </div>
-          {typeof searchResult?.song?.spotify_streams === 'number' && (
+          {typeof searchResult?.song?.popularity === 'number' && (
                     <div className={`text-xs mt-1 ${theme === 'light' ? 'text-gray-600' : 'text-gray-300'}`}>
-            {Intl.NumberFormat().format(searchResult.song.spotify_streams)} streams
+            Popularity: {Math.max(0, Math.min(100, Number(searchResult.song.popularity)))}
                     </div>
                   )}
                   <span className={`text-md font-medium ${

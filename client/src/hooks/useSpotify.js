@@ -54,7 +54,7 @@ const useSpotify = () => {
 
   const authorizeUser = () => {
     const CLIENT_ID = '9124e833ec0b41559b46312aaed4c3c5';
-    const REDIRECT_URI = 'http://localhost:3000/callback';
+    const REDIRECT_URI = `${window.location.origin}/callback`;
     const scopes = [
       'user-read-currently-playing',
       'user-read-recently-played',
