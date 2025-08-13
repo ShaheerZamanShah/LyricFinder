@@ -402,8 +402,8 @@ const Home = ({ searchResult: externalResult, onSearchResults, onCollapseChange,
         } else {
           result.song.featured_artists = parseFeaturedArtists(result.song.title);
         }
-      // Set result immediately - no recommendations initially
-      setSearchResult(result);
+  // Set result immediately - no recommendations initially
+  setSearchResult(result);
       onSearchResults?.(result);
      // Try to compute dominant color from current image
      if (result.song.image) {
@@ -412,6 +412,24 @@ const Home = ({ searchResult: externalResult, onSearchResults, onCollapseChange,
        setCoverColor(null);
        onCoverColorChange?.(null);
      }
+
+      // Fetch streams (playcount) from Last.fm and attach to song for UI
+      (async () => {
+        try {
+          const params = new URLSearchParams();
+          params.set('title', result.song.title);
+          if (result.song.artist) params.set('artist', result.song.artist);
+          const resp = await fetch(`${API_ENDPOINTS.LASTFM_TRACK}?${params.toString()}`);
+          if (resp.ok) {
+            const info = await resp.json();
+            if (typeof info?.playcount === 'number') {
+              result.song.streams = info.playcount;
+              result.song.listeners = info.listeners;
+              setSearchResult({ ...result });
+            }
+          }
+        } catch {}
+      })();
 
       // Proactively fetch preview and high-quality cover so the album image shows without clicking
       (async () => {
@@ -1154,6 +1172,11 @@ const Home = ({ searchResult: externalResult, onSearchResults, onCollapseChange,
                       </div>
                     )}
                   </div>
+                  {typeof searchResult?.song?.streams === 'number' && (
+                    <div className={`text-xs mt-1 ${theme === 'light' ? 'text-gray-600' : 'text-gray-300'}`}>
+                      {Intl.NumberFormat().format(searchResult.song.streams)} streams
+                    </div>
+                  )}
                   <span className={`text-md font-medium ${
                     theme === 'light' ? 'text-gray-700' : 'text-indigo-400'
                   }`}>{searchResult.song.artist}</span>

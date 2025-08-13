@@ -19,6 +19,8 @@ export const API_ENDPOINTS = {
   GENIUS_DETAILS: `${API_BASE_URL}/api/lyrics/details`,
   SONGS: `${API_BASE_URL}/api/songs`,
   LASTFM_ARTIST: `${API_BASE_URL}/api/lastfm/artist`,
+  LASTFM_TRACK: `${API_BASE_URL}/api/lastfm/track`,
+  LASTFM_TRACK: `${API_BASE_URL}/api/lastfm/track`,
   SPOTIFY_AUTH: `${API_BASE_URL}/api/spotify/auth`,
   SPOTIFY_CALLBACK: `${API_BASE_URL}/api/spotify/callback`,
   SPOTIFY_RECOMMENDATIONS: `${API_BASE_URL}/api/spotify/recommendations`,

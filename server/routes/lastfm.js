@@ -215,3 +215,57 @@ router.get('/image-proxy', async (req, res) => {
 });
 
 module.exports = router;
+
+// Track info endpoint to get playcount (streams approximation)
+router.get('/track', async (req, res) => {
+  try {
+    const { title, artist } = req.query;
+    if (!title) {
+      return res.status(400).json({ error: 'title is required' });
+    }
+
+    const apiKey = process.env.LASTFM_API_KEY || "62310b3f309e3584919d948cdc23b021";
+
+    const url = new URL('https://ws.audioscrobbler.com/2.0/');
+    url.searchParams.set('method', 'track.getInfo');
+    url.searchParams.set('api_key', apiKey);
+    url.searchParams.set('format', 'json');
+    url.searchParams.set('autocorrect', '1');
+    url.searchParams.set('track', title);
+    if (artist) url.searchParams.set('artist', artist);
+
+    const response = await fetch(url.toString());
+    if (!response.ok) {
+      return res.status(response.status).json({ error: 'Last.fm API error' });
+    }
+    const data = await response.json();
+    if (data?.error) {
+      return res.status(404).json({ error: data.message || 'Track not found' });
+    }
+
+    const t = data?.track;
+    if (!t) {
+      return res.status(404).json({ error: 'Track not found' });
+    }
+
+    const playcount = Number(t.playcount || 0);
+    const listeners = Number(t.listeners || 0);
+    const duration = Number(t.duration || 0);
+    const name = t.name || title;
+    const artistName = t.artist?.name || artist || null;
+    const urlOut = t.url || null;
+
+    return res.json({
+      title: name,
+      artist: artistName,
+      playcount,
+      listeners,
+      duration,
+      url: urlOut,
+      source: 'Last.fm',
+    });
+  } catch (err) {
+    console.error('Last.fm track info error:', err);
+    return res.status(500).json({ error: 'Internal server error' });
+  }
+});
