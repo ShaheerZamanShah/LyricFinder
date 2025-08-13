@@ -12,8 +12,8 @@ const SongCard = ({ song, onClick }) => {
       onClick={() => onClick && onClick(song)}
     >
       <div className="text-xl font-bold text-gray-800 mb-1">{song.title}</div>
-      {typeof song.streams === 'number' && (
-        <div className="text-gray-500 text-sm mb-1">{Intl.NumberFormat().format(song.streams)} streams</div>
+      {typeof song.spotify_streams === 'number' && (
+        <div className="text-gray-500 text-sm mb-1">{Intl.NumberFormat().format(song.spotify_streams)} streams</div>
       )}
       <div className="text-gray-600 text-base mb-2">by {song.artist}</div>
       <div className="flex justify-between items-center text-sm text-gray-500">

@@ -413,7 +413,7 @@ const Home = ({ searchResult: externalResult, onSearchResults, onCollapseChange,
        onCoverColorChange?.(null);
      }
 
-      // Fetch streams: prefer accurate Spotify playcount when we have a token and spotify_id; otherwise use Last.fm
+  // Fetch accurate Spotify streams if we have a user token and spotify_id; otherwise, do not show streams
       ;(async () => {
         try {
           // If we have a Spotify token cached and spotify_id, ask backend for accurate playcount
@@ -425,24 +425,10 @@ const Home = ({ searchResult: externalResult, onSearchResults, onCollapseChange,
             if (resp.ok) {
               const json = await resp.json();
               if (typeof json?.playcount === 'number') {
-                result.song.streams = json.playcount;
+        result.song.spotify_streams = json.playcount;
                 setSearchResult({ ...result });
                 return; // prefer Spotify count
               }
-            }
-          }
-
-          // Fallback: Last.fm playcount
-          const p = new URLSearchParams();
-          p.set('title', result.song.title);
-          if (result.song.artist) p.set('artist', result.song.artist);
-          const lf = await fetch(`${API_ENDPOINTS.LASTFM_TRACK}?${p.toString()}`);
-          if (lf.ok) {
-            const info = await lf.json();
-            if (typeof info?.playcount === 'number') {
-              result.song.streams = info.playcount;
-              result.song.listeners = info.listeners;
-              setSearchResult({ ...result });
             }
           }
         } catch {}
@@ -1189,9 +1175,9 @@ const Home = ({ searchResult: externalResult, onSearchResults, onCollapseChange,
                       </div>
                     )}
                   </div>
-                  {typeof searchResult?.song?.streams === 'number' && (
+          {typeof searchResult?.song?.spotify_streams === 'number' && (
                     <div className={`text-xs mt-1 ${theme === 'light' ? 'text-gray-600' : 'text-gray-300'}`}>
-                      {Intl.NumberFormat().format(searchResult.song.streams)} streams
+            {Intl.NumberFormat().format(searchResult.song.spotify_streams)} streams
                     </div>
                   )}
                   <span className={`text-md font-medium ${
