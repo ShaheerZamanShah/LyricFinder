@@ -33,6 +33,24 @@ export default function RatingControl({ song, color, className = '' }) {
   const songKey = useMemo(() => makeSongKey(song), [song]);
   const debounceRef = useRef(null);
 
+  // If the song gains a spotify_id after initial render, migrate any stored rating
+  useEffect(() => {
+    if (!song || !song.spotify_id) return;
+    try {
+      const metaKey = makeSongKey({ title: song.title, artist: song.artist });
+      const spotifyKey = makeSongKey({ spotify_id: song.spotify_id });
+      if (metaKey !== spotifyKey) {
+        const stored = window.localStorage.getItem(`rf_rating_${metaKey}`);
+        if (stored != null && window.localStorage.getItem(`rf_rating_${spotifyKey}`) == null) {
+          window.localStorage.setItem(`rf_rating_${spotifyKey}`, stored);
+          // Also migrate aggregate cache if present
+          const agg = window.localStorage.getItem(`rf_rating_agg_${metaKey}`);
+          if (agg) window.localStorage.setItem(`rf_rating_agg_${spotifyKey}`, agg);
+        }
+      }
+    } catch {}
+  }, [song?.spotify_id]);
+
   // Load my rating from localStorage and fetch aggregate
   useEffect(() => {
     if (!song) return;

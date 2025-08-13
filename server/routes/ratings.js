@@ -36,7 +36,8 @@ router.post('/', async (req, res) => {
     // compute aggregate
     const agg = await Rating.aggregate([
       { $match: { songKey } },
-      { $group: { _id: '$songKey', avg: { $avg: '$rating' }, count: { $count: {} } } }
+      // Use $sum: 1 for count to support wider MongoDB versions
+      { $group: { _id: '$songKey', avg: { $avg: '$rating' }, count: { $sum: 1 } } }
     ]);
     const avg = agg?.[0]?.avg || 0;
     const count = agg?.[0]?.count || 0;
@@ -57,7 +58,8 @@ router.get('/', async (req, res) => {
     const songKey = makeSongKey({ spotify_id, title, artist });
     const agg = await Rating.aggregate([
       { $match: { songKey } },
-      { $group: { _id: '$songKey', avg: { $avg: '$rating' }, count: { $count: {} } } }
+      // Use $sum: 1 for count to support wider MongoDB versions
+      { $group: { _id: '$songKey', avg: { $avg: '$rating' }, count: { $sum: 1 } } }
     ]);
     const average = agg?.[0]?.avg || 0;
     const count = agg?.[0]?.count || 0;
