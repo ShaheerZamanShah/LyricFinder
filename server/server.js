@@ -25,12 +25,16 @@ const limiter = rateLimit({
 });
 app.use(limiter);
 
-// MongoDB connection
-mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/lyricfinder')
+// MongoDB connection – use provided MONGODB_URI and log status
+const mongoUri = process.env.MONGODB_URI || 'mongodb://localhost:27017/lyricfinder';
+mongoose.connect(mongoUri, {
+  serverSelectionTimeoutMS: 10000,
+  connectTimeoutMS: 10000,
+})
   .then(() => console.log('MongoDB connected'))
   .catch(err => {
     console.log('MongoDB connection error:', err.message);
-    console.log('Note: The app will still work, but lyrics won\'t be cached');
+    console.log('Note: The app will still work, but server-side persistence (e.g., ratings, cache) is disabled until DB is available.');
   });
 
 // Routes
@@ -53,6 +57,8 @@ app.use('*', (req, res) => {
   res.status(404).json({ message: 'Route not found' });
 });
 
+// Start server immediately; ratings route will return 503 if DB is unavailable
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
+  console.log(`MongoDB URI: ${mongoUri ? '[set]' : '[missing]'}`);
 });

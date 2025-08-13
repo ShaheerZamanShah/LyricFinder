@@ -1,5 +1,6 @@
 const express = require('express');
 const router = express.Router();
+const mongoose = require('mongoose');
 const Rating = require('../models/Rating');
 
 // Helper to normalize a song key
@@ -13,6 +14,9 @@ function makeSongKey({ spotify_id, title, artist }) {
 // POST /api/ratings -> { spotify_id?, title, artist, rating, userId }
 router.post('/', async (req, res) => {
   try {
+    if (mongoose.connection.readyState !== 1) {
+      return res.status(503).json({ error: 'db_unavailable' });
+    }
     const { spotify_id, title, artist, rating, userId } = req.body || {};
     const r = Number(rating);
     if (!Number.isFinite(r) || r < 0 || r > 10) {
@@ -46,6 +50,9 @@ router.post('/', async (req, res) => {
 // GET /api/ratings?spotify_id=...&title=...&artist=...
 router.get('/', async (req, res) => {
   try {
+    if (mongoose.connection.readyState !== 1) {
+      return res.status(503).json({ error: 'db_unavailable' });
+    }
     const { spotify_id, title, artist } = req.query || {};
     const songKey = makeSongKey({ spotify_id, title, artist });
     const agg = await Rating.aggregate([
