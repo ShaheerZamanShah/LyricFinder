@@ -39,9 +39,10 @@ router.post('/', async (req, res) => {
       // Use $sum: 1 for count to support wider MongoDB versions
       { $group: { _id: '$songKey', avg: { $avg: '$rating' }, count: { $sum: 1 } } }
     ]);
-    const avg = agg?.[0]?.avg || 0;
-    const count = agg?.[0]?.count || 0;
-    return res.json({ ok: true, rating: doc.rating, average: Number(avg.toFixed(2)), count });
+  const avg = agg?.[0]?.avg;
+  const count = agg?.[0]?.count || 0;
+  const average = count > 0 && typeof avg === 'number' ? Number(avg.toFixed(2)) : null;
+  return res.json({ ok: true, rating: doc.rating, average, count });
   } catch (err) {
     console.error('ratings post error:', err.message);
     return res.status(500).json({ error: 'failed to save rating' });
@@ -61,9 +62,10 @@ router.get('/', async (req, res) => {
       // Use $sum: 1 for count to support wider MongoDB versions
       { $group: { _id: '$songKey', avg: { $avg: '$rating' }, count: { $sum: 1 } } }
     ]);
-    const average = agg?.[0]?.avg || 0;
-    const count = agg?.[0]?.count || 0;
-    return res.json({ songKey, average: Number(average.toFixed(2)), count });
+  const has = Array.isArray(agg) && agg.length > 0;
+  const count = has ? (agg[0].count || 0) : 0;
+  const average = count > 0 ? Number((agg[0].avg || 0).toFixed(2)) : null;
+  return res.json({ songKey, average, count });
   } catch (err) {
     console.error('ratings get error:', err.message);
     return res.status(500).json({ error: 'failed to get ratings' });

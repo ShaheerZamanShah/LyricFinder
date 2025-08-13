@@ -118,8 +118,9 @@ export default function RatingControl({ song, color, className = '' }) {
       });
       if (resp.ok) {
         const data = await resp.json();
-        setAvg(typeof data?.average === 'number' ? data.average : null);
-        setCount(Number(data?.count || 0));
+        // Optimistically reflect your rating; use server average when present
+        setAvg(typeof data?.average === 'number' ? data.average : Number(value));
+        setCount(Math.max(1, Number(data?.count || 1)));
         try { window.localStorage.setItem(`rf_rating_${songKey}`, String(value)); } catch {}
   try { window.localStorage.setItem(`rf_rating_agg_${songKey}`, JSON.stringify({ average: data?.average ?? null, count: Number(data?.count || 0) })); } catch {}
         setMyRating(Number(value));
