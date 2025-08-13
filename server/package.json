@@ -26,6 +26,7 @@
   "wanakana": "^5.3.1"
   },
   "devDependencies": {
-    "nodemon": "^3.1.4"
+  "nodemon": "^3.1.4",
+  "mongodb-memory-server": "^10.1.4"
   }
 }

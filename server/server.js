@@ -25,17 +25,34 @@ const limiter = rateLimit({
 });
 app.use(limiter);
 
-// MongoDB connection – use provided MONGODB_URI and log status
-const mongoUri = process.env.MONGODB_URI || 'mongodb://localhost:27017/lyricfinder';
-mongoose.connect(mongoUri, {
-  serverSelectionTimeoutMS: 10000,
-  connectTimeoutMS: 10000,
-})
-  .then(() => console.log('MongoDB connected'))
-  .catch(err => {
+// MongoDB connection – supports real DB via MONGODB_URI or in-memory for local testing via USE_MEMORY_DB=1
+let mongoUri = process.env.MONGODB_URI || 'mongodb://localhost:27017/lyricfinder';
+
+async function initDatabase() {
+  try {
+    if (process.env.USE_MEMORY_DB === '1') {
+      // Lazy load to avoid bundling when not used
+      const { MongoMemoryServer } = require('mongodb-memory-server');
+      const mem = await MongoMemoryServer.create();
+      mongoUri = mem.getUri();
+      console.log('[DB] Using in-memory MongoDB at', mongoUri);
+    } else {
+      console.log('[DB] Using configured MongoDB URI');
+    }
+
+    await mongoose.connect(mongoUri, {
+      serverSelectionTimeoutMS: 10000,
+      connectTimeoutMS: 10000,
+    });
+    console.log('MongoDB connected');
+  } catch (err) {
     console.log('MongoDB connection error:', err.message);
     console.log('Note: The app will still work, but server-side persistence (e.g., ratings, cache) is disabled until DB is available.');
-  });
+  }
+}
+
+// Fire-and-forget DB init (routes will return 503 until connected)
+initDatabase();
 
 // Routes
 app.use('/api/songs', require('./routes/songs'));
