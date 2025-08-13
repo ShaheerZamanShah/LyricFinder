@@ -413,15 +413,32 @@ const Home = ({ searchResult: externalResult, onSearchResults, onCollapseChange,
        onCoverColorChange?.(null);
      }
 
-      // Fetch streams (playcount) from Last.fm and attach to song for UI
-      (async () => {
+      // Fetch streams: prefer accurate Spotify playcount when we have a token and spotify_id; otherwise use Last.fm
+      ;(async () => {
         try {
-          const params = new URLSearchParams();
-          params.set('title', result.song.title);
-          if (result.song.artist) params.set('artist', result.song.artist);
-          const resp = await fetch(`${API_ENDPOINTS.LASTFM_TRACK}?${params.toString()}`);
-          if (resp.ok) {
-            const info = await resp.json();
+          // If we have a Spotify token cached and spotify_id, ask backend for accurate playcount
+          const webToken = window.localStorage.getItem('spotify_token');
+          if (webToken && result.song.spotify_id) {
+            const resp = await fetch(`${API_ENDPOINTS.SPOTIFY_PLAYCOUNT}?track_id=${encodeURIComponent(result.song.spotify_id)}`, {
+              headers: { Authorization: `Bearer ${webToken}` }
+            });
+            if (resp.ok) {
+              const json = await resp.json();
+              if (typeof json?.playcount === 'number') {
+                result.song.streams = json.playcount;
+                setSearchResult({ ...result });
+                return; // prefer Spotify count
+              }
+            }
+          }
+
+          // Fallback: Last.fm playcount
+          const p = new URLSearchParams();
+          p.set('title', result.song.title);
+          if (result.song.artist) p.set('artist', result.song.artist);
+          const lf = await fetch(`${API_ENDPOINTS.LASTFM_TRACK}?${p.toString()}`);
+          if (lf.ok) {
+            const info = await lf.json();
             if (typeof info?.playcount === 'number') {
               result.song.streams = info.playcount;
               result.song.listeners = info.listeners;

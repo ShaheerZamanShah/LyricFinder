@@ -636,3 +636,63 @@ router.get('/artist/:artistName', async (req, res) => {
 });
 
 module.exports = router;
+
+// Unofficial: Get Spotify playcount for a track via spclient (requires a valid web access token)
+// Usage: GET /api/spotify/playcount?track_id=... with header Authorization: Bearer <web_access_token>
+router.get('/playcount', async (req, res) => {
+  try {
+    const { track_id } = req.query;
+    const bearer = req.headers.authorization;
+    if (!track_id) {
+      return res.status(400).json({ error: 'track_id is required' });
+    }
+    if (!bearer || !bearer.toLowerCase().startsWith('bearer ')) {
+      return res.status(401).json({ error: 'Authorization Bearer token (Spotify web access token) required' });
+    }
+    const token = bearer.replace(/^[Bb]earer\s+/, '');
+
+    const headers = {
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'App-Platform': 'WebPlayer',
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) LyricFinder',
+      },
+      timeout: 7000,
+      validateStatus: () => true,
+    };
+
+    // Try new endpoint, then legacy fallback
+    const urls = [
+      `https://spclient.wg.spotify.com/track-playcount/v1/track/${encodeURIComponent(track_id)}`,
+      `https://spclient.wg.spotify.com/track-playcount/v1/legacy/track/${encodeURIComponent(track_id)}`,
+    ];
+
+    let data = null; let status = 0;
+    for (const url of urls) {
+      try {
+        const resp = await axios.get(url, headers);
+        status = resp.status;
+        if (resp.status === 200 && resp.data) { data = resp.data; break; }
+      } catch (e) {
+        // try next
+      }
+    }
+
+    if (!data) {
+      return res.status(status || 502).json({ error: 'Failed to fetch playcount (token likely invalid for spclient)' });
+    }
+
+    // Common shapes: { tracks: { [id]: { playcount, ... } } } or { playcount, ... }
+    let playcount = null;
+    if (typeof data.playcount === 'number') {
+      playcount = data.playcount;
+    } else if (data.tracks && data.tracks[track_id] && typeof data.tracks[track_id].playcount === 'number') {
+      playcount = data.tracks[track_id].playcount;
+    }
+
+    return res.json({ track_id, playcount, raw: data });
+  } catch (error) {
+    console.error('Spotify playcount error:', error.message);
+    res.status(500).json({ error: 'Failed to get Spotify playcount' });
+  }
+});
