@@ -106,7 +106,7 @@ const useSpotify = () => {
     }
   };
 
-  const getRecommendations = async (trackId, artistName) => {
+  const getRecommendations = async (trackId, artistName, title) => {
     if (!accessToken) {
       throw new Error('No Spotify access token available');
     }
@@ -118,6 +118,9 @@ const useSpotify = () => {
       }
       if (artistName) {
         params.append('artist_name', artistName);
+      }
+      if (title) {
+        params.append('title', title);
       }
   params.append('limit', '10');
 
@@ -132,7 +135,7 @@ const useSpotify = () => {
       }
 
       const data = await response.json();
-      return data.recommendations;
+  return data.recommendations;
     } catch (error) {
       console.error('Error fetching recommendations:', error);
       throw error;

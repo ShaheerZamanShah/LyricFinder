@@ -21,12 +21,13 @@ const makeSongKey = (song) => {
   return `meta:${t}::${a}`;
 };
 
-export default function RatingControl({ song, className = '' }) {
+export default function RatingControl({ song, color, className = '' }) {
   const [myRating, setMyRating] = useState(null);
   const [pendingValue, setPendingValue] = useState(5.0); // slider position
   const [avg, setAvg] = useState(null);
   const [count, setCount] = useState(0);
   const [saving, setSaving] = useState(false);
+  const [expanded, setExpanded] = useState(false);
   const [touched, setTouched] = useState(false);
   const userId = useMemo(() => getOrCreateUserId(), []);
   const songKey = useMemo(() => makeSongKey(song), [song]);
@@ -53,6 +54,15 @@ export default function RatingControl({ song, className = '' }) {
 
     // average/count
     let canceled = false;
+    // optimistic: use cached aggregate while fetching
+    try {
+      const cached = window.localStorage.getItem(`rf_rating_agg_${songKey}`);
+      if (cached) {
+        const { average, count } = JSON.parse(cached);
+        if (typeof average === 'number') setAvg(average);
+        if (typeof count === 'number') setCount(count);
+      }
+    } catch {}
     (async () => {
       try {
         const params = new URLSearchParams();
@@ -64,12 +74,13 @@ export default function RatingControl({ song, className = '' }) {
           if (!canceled) {
             setAvg(typeof data?.average === 'number' ? data.average : null);
             setCount(Number(data?.count || 0));
+            try { window.localStorage.setItem(`rf_rating_agg_${songKey}`, JSON.stringify({ average: data?.average ?? null, count: Number(data?.count || 0) })); } catch {}
           }
         } else if (!canceled) {
-          setAvg(null); setCount(0);
+          // keep previous or cached values; don't force to 0
         }
       } catch {
-        if (!canceled) { setAvg(null); setCount(0); }
+        // keep previous or cached values on error
       }
     })();
     return () => { canceled = true; };
@@ -92,6 +103,7 @@ export default function RatingControl({ song, className = '' }) {
         setAvg(typeof data?.average === 'number' ? data.average : null);
         setCount(Number(data?.count || 0));
         try { window.localStorage.setItem(`rf_rating_${songKey}`, String(value)); } catch {}
+  try { window.localStorage.setItem(`rf_rating_agg_${songKey}`, JSON.stringify({ average: data?.average ?? null, count: Number(data?.count || 0) })); } catch {}
         setMyRating(Number(value));
       }
     } finally {
@@ -117,31 +129,67 @@ export default function RatingControl({ song, className = '' }) {
     scheduleSubmit(pendingValue);
   };
 
-  // Tailwind-styled range slider with visible value and aggregate
+  // Background color from album
+  const chipStyle = useMemo(() => {
+    if (!color) return {};
+    const { r = 60, g = 60, b = 60 } = color || {};
+    const bg = `linear-gradient(135deg, rgba(${r},${g},${b},0.20) 0%, rgba(${r},${g},${b},0.35) 100%)`;
+    const brd = `rgba(${r},${g},${b},0.45)`;
+    return { background: bg, borderColor: brd };
+  }, [color]);
+
+  // Collapsed by default: show aggregate; expand on click to reveal slider and personal rating
   return (
-    <div className={`flex items-center gap-3 bg-white/10 border border-white/15 rounded-full px-4 py-2 backdrop-blur-sm ${className}`}>
-      <div className="flex items-center gap-2">
-        <span className="text-xs text-white/80 whitespace-nowrap">Your rating</span>
-        <span className="text-sm font-semibold text-white/90 tabular-nums min-w-10 text-right">{(touched ? pendingValue : (myRating ?? pendingValue)).toFixed(1)}</span>
+    <div
+      className={`group flex items-center gap-3 rounded-full px-4 py-2 backdrop-blur-sm border transition-all duration-300 ${className}`}
+      style={chipStyle}
+      role="region"
+      aria-label="Song rating"
+    >
+      {!expanded && (
+        <button
+          type="button"
+          onClick={() => setExpanded(true)}
+          className="flex items-center gap-2 text-white/90 hover:text-white transition-colors"
+          aria-expanded={expanded}
+          aria-controls="rating-slider"
+        >
+          <span className="text-xs opacity-80">Rating</span>
+          <span className="text-sm font-semibold tabular-nums">{avg != null ? avg.toFixed(2) : '–'}</span>
+          {count ? <span className="text-xs opacity-70">({count})</span> : null}
+        </button>
+      )}
+
+      <div
+        id="rating-slider"
+        className={`flex items-center gap-3 overflow-hidden transition-all duration-300 ${expanded ? 'w-auto opacity-100 ml-1' : 'w-0 opacity-0'} `}
+        aria-hidden={!expanded}
+      >
+        <div className="flex items-center gap-2">
+          <span className="text-xs text-white/80 whitespace-nowrap">Your rating</span>
+          <span className="text-sm font-semibold text-white/90 tabular-nums min-w-10 text-right">{(touched ? pendingValue : (myRating ?? pendingValue)).toFixed(1)}</span>
+        </div>
+        <input
+          type="range"
+          min="0"
+          max="10"
+          step="0.5"
+          value={pendingValue}
+          onChange={onChange}
+          onMouseUp={onCommit}
+          onTouchEnd={onCommit}
+          aria-label="Rate this song from 0 to 10 in steps of 0.5"
+          className="appearance-none w-40 sm:w-56 h-2 rounded-full bg-white/25 focus:outline-none focus:ring-2 focus:ring-white/40 cursor-pointer"
+        />
+        <button
+          type="button"
+          onClick={() => setExpanded(false)}
+          className="text-xs text-white/70 hover:text-white/90 px-2 py-1 rounded-full border border-white/15"
+          aria-label="Close rating controls"
+        >
+          Done
+        </button>
       </div>
-      <input
-        type="range"
-        min="0"
-        max="10"
-        step="0.5"
-        value={pendingValue}
-        onChange={onChange}
-        onMouseUp={onCommit}
-        onTouchEnd={onCommit}
-        aria-label="Rate this song from 0 to 10 in steps of 0.5"
-        className="appearance-none w-40 sm:w-56 h-2 rounded-full bg-white/20 focus:outline-none focus:ring-2 focus:ring-white/40 cursor-pointer"
-      />
-      <div className="flex items-center gap-1 text-xs text-white/70">
-        <span>Avg:</span>
-        <span className="font-medium text-white/90">{avg != null ? avg.toFixed(2) : '–'}</span>
-        {count ? <span>({count})</span> : null}
-      </div>
-      {saving && <span className="text-[10px] text-white/50">saving…</span>}
     </div>
   );
 }

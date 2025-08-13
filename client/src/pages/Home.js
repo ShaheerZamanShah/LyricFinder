@@ -531,7 +531,7 @@ const Home = ({ searchResult: externalResult, onSearchResults, onCollapseChange,
       setIsLoadingRecommendations(true);
       setTimeout(async () => {
         try {
-          const recommendations = await getSpotifyRecommendations(result.song.spotify_id, result.song.artist);
+          const recommendations = await getSpotifyRecommendations(result.song.spotify_id, result.song.artist, result.song.title);
           result.song.recommendations = recommendations;
           setSearchResult({ ...result });
         } catch (error) {
@@ -680,9 +680,9 @@ const Home = ({ searchResult: externalResult, onSearchResults, onCollapseChange,
     await playAudio(searchResult.song.preview_url);
   };
 
-  const getSpotifyRecommendations = async (spotifyId, artistName) => {
+  const getSpotifyRecommendations = async (spotifyId, artistName, title) => {
     try {
-      const recommendations = await getRecommendations(spotifyId, artistName);
+  const recommendations = await getRecommendations(spotifyId, artistName, title);
       
       const formattedRecs = recommendations.map((rec, index) => ({
         id: `spotify_${rec.id}_${Date.now()}_${index}`,
@@ -855,7 +855,7 @@ const Home = ({ searchResult: externalResult, onSearchResults, onCollapseChange,
           setIsLoadingRecommendations(true);
           setTimeout(async () => {
             try {
-              const recommendations = await getSpotifyRecommendations(result.song.spotify_id, result.song.artist);
+              const recommendations = await getSpotifyRecommendations(result.song.spotify_id, result.song.artist, result.song.title);
               result.song.recommendations = recommendations;
               setSearchResult({...result});
             } catch (error) {
@@ -1284,7 +1284,7 @@ const Home = ({ searchResult: externalResult, onSearchResults, onCollapseChange,
                   )}
 
                   {/* Rating control (to the right of the Spotify link) */}
-                  <RatingControl song={searchResult.song} />
+                  <RatingControl song={searchResult.song} color={coverColor} />
 
                   {/* Open in New Tab Button for External Links */}
                   {(searchResult.song.external_url || searchResult.song.genius_url) && (
