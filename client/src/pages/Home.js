@@ -413,15 +413,40 @@ const Home = ({ searchResult: externalResult, onSearchResults, onCollapseChange,
        onCoverColorChange?.(null);
      }
 
-      // Fetch Spotify popularity via backend when we have a spotify_id
+      // Fetch Spotify popularity via backend; resolve spotify_id if needed
       ;(async () => {
         try {
-          if (result.song.spotify_id) {
-            const resp = await fetch(`${API_ENDPOINTS.SPOTIFY_AUDIO_FEATURES}?track_id=${encodeURIComponent(result.song.spotify_id)}`);
+          let trackId = result.song.spotify_id || null;
+          if (!trackId && result.song.spotify_url) {
+            const m = (result.song.spotify_url || '').match(/\btrack\/([A-Za-z0-9]+)\b/);
+            if (m && m[1]) trackId = m[1];
+          }
+
+          if (trackId) {
+            const resp = await fetch(`${API_ENDPOINTS.SPOTIFY_AUDIO_FEATURES}?track_id=${encodeURIComponent(trackId)}`);
             if (resp.ok) {
               const json = await resp.json();
               if (typeof json?.popularity === 'number') {
+                result.song.spotify_id = trackId;
                 result.song.popularity = json.popularity;
+                setSearchResult({ ...result });
+                return;
+              }
+            }
+          } else {
+            // Resolve via lightweight search (server has client credentials)
+            const q = `${result.song.title} ${result.song.artist}`.trim();
+            const resp = await fetch(`${API_ENDPOINTS.SPOTIFY_SEARCH}?q=${encodeURIComponent(q)}&limit=1`);
+            if (resp.ok) {
+              const json = await resp.json();
+              const first = json?.tracks?.[0];
+              if (first?.spotify_id) {
+                result.song.spotify_id = first.spotify_id;
+                result.song.spotify_url = first.external_url || result.song.spotify_url;
+                result.song.image = first.image || result.song.image;
+                if (typeof first.popularity === 'number') {
+                  result.song.popularity = first.popularity;
+                }
                 setSearchResult({ ...result });
                 return;
               }
