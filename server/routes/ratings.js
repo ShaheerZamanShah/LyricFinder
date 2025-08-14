@@ -27,6 +27,21 @@ router.post('/', async (req, res) => {
     const songKey = makeSongKey({ spotify_id, title, artist });
     if (!songKey) return res.status(400).json({ error: 'invalid song identity' });
 
+    // If we have a spotify_id now, migrate any previous meta:title::artist ratings to the spotify key
+    if (spotify_id) {
+      try {
+        const metaKey = makeSongKey({ title, artist });
+        const spotifyKey = makeSongKey({ spotify_id });
+        if (metaKey && spotifyKey && metaKey !== spotifyKey) {
+          // Best-effort migration; ignore duplicate key errors
+          await Rating.updateMany(
+            { songKey: metaKey },
+            { $set: { songKey: spotifyKey } }
+          ).catch(() => {});
+        }
+      } catch {}
+    }
+
     const doc = await Rating.findOneAndUpdate(
       { songKey, userId: uid },
       { $set: { rating: r }, $setOnInsert: { songKey, userId: uid, createdAt: new Date() } },
@@ -56,16 +71,23 @@ router.get('/', async (req, res) => {
       return res.status(503).json({ error: 'db_unavailable' });
     }
     const { spotify_id, title, artist } = req.query || {};
-    const songKey = makeSongKey({ spotify_id, title, artist });
+    const keys = [];
+    const metaKey = makeSongKey({ title, artist });
+    if (metaKey) keys.push(metaKey);
+    if (spotify_id) {
+      const sKey = makeSongKey({ spotify_id });
+      if (sKey && !keys.includes(sKey)) keys.push(sKey);
+    }
+    const match = keys.length ? { songKey: { $in: keys } } : {};
     const agg = await Rating.aggregate([
-      { $match: { songKey } },
-      // Use $sum: 1 for count to support wider MongoDB versions
-      { $group: { _id: '$songKey', avg: { $avg: '$rating' }, count: { $sum: 1 } } }
+      { $match: match },
+      { $group: { _id: null, avg: { $avg: '$rating' }, count: { $sum: 1 } } }
     ]);
-  const has = Array.isArray(agg) && agg.length > 0;
-  const count = has ? (agg[0].count || 0) : 0;
-  const average = count > 0 ? Number((agg[0].avg || 0).toFixed(2)) : null;
-  return res.json({ songKey, average, count });
+    const has = Array.isArray(agg) && agg.length > 0;
+    const count = has ? (agg[0].count || 0) : 0;
+    const average = count > 0 && typeof agg?.[0]?.avg === 'number' ? Number(agg[0].avg.toFixed(2)) : null;
+    const canonicalKey = spotify_id ? makeSongKey({ spotify_id }) : metaKey;
+    return res.json({ songKey: canonicalKey, average, count });
   } catch (err) {
     console.error('ratings get error:', err.message);
     return res.status(500).json({ error: 'failed to get ratings' });
