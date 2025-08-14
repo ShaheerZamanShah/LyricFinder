@@ -2,6 +2,200 @@ const express = require('express');
 const axios = require('axios');
 const router = express.Router();
 
+// --- Helpers for OAuth cookies and URLs ---
+function parseCookies(req) {
+  const header = req.headers.cookie || '';
+  return header.split(';').reduce((acc, part) => {
+    const idx = part.indexOf('=');
+    if (idx > -1) {
+      const k = part.slice(0, idx).trim();
+      const v = decodeURIComponent(part.slice(idx + 1).trim());
+      acc[k] = v;
+    }
+    return acc;
+  }, {});
+}
+
+function getCookie(req, name) {
+  const all = parseCookies(req);
+  return all[name];
+}
+
+function setCookie(res, name, value, opts = {}) {
+  const {
+    httpOnly = true,
+    sameSite = 'Lax',
+    secure = process.env.NODE_ENV === 'production',
+    maxAge, // ms
+    path = '/',
+  } = opts;
+  let cookie = `${name}=${encodeURIComponent(value)}; Path=${path}; SameSite=${sameSite}`;
+  if (httpOnly) cookie += '; HttpOnly';
+  if (secure) cookie += '; Secure';
+  if (typeof maxAge === 'number') cookie += `; Max-Age=${Math.floor(maxAge / 1000)}`;
+  res.setHeader('Set-Cookie', [...(Array.isArray(res.getHeader('Set-Cookie')) ? res.getHeader('Set-Cookie') : res.getHeader('Set-Cookie') ? [res.getHeader('Set-Cookie')] : []), cookie]);
+}
+
+function clearCookie(res, name) {
+  setCookie(res, name, '', { maxAge: 0 });
+}
+
+function getServerBaseUrl(req) {
+  // Prefer explicit env var, else infer
+  const fromEnv = process.env.SERVER_BASE_URL;
+  if (fromEnv) return fromEnv.replace(/\/$/, '');
+  const proto = (req.headers['x-forwarded-proto'] || req.protocol || 'http').split(',')[0];
+  const host = req.headers['x-forwarded-host'] || req.get('host');
+  return `${proto}://${host}`;
+}
+
+function getFrontendUrl(req) {
+  const fromEnv = process.env.FRONTEND_URL;
+  if (fromEnv) return fromEnv;
+  // Default to root of same origin
+  return '/';
+}
+
+async function refreshSpotifyAccessToken(refreshToken, clientId, clientSecret) {
+  const credentials = Buffer.from(`${clientId}:${clientSecret}`).toString('base64');
+  const params = new URLSearchParams();
+  params.set('grant_type', 'refresh_token');
+  params.set('refresh_token', refreshToken);
+  const resp = await axios.post(
+    'https://accounts.spotify.com/api/token',
+    params.toString(),
+    { headers: { Authorization: `Basic ${credentials}`, 'Content-Type': 'application/x-www-form-urlencoded' } }
+  );
+  return resp.data; // { access_token, token_type, scope, expires_in, refresh_token? }
+}
+
+// --- User OAuth: start auth flow ---
+router.get('/auth', async (req, res) => {
+  try {
+    const clientId = process.env.SPOTIFY_CLIENT_ID;
+    const redirectUri = process.env.SPOTIFY_REDIRECT_URI || `${getServerBaseUrl(req)}/api/spotify/callback`;
+    if (!clientId) return res.status(500).json({ error: 'Spotify client ID not configured' });
+    const scope = 'user-top-read';
+
+    // CSRF state
+    const state = Math.random().toString(36).slice(2) + Math.random().toString(36).slice(2);
+    setCookie(res, 'spotify_oauth_state', state, { maxAge: 10 * 60 * 1000 });
+
+    const params = new URLSearchParams();
+    params.set('response_type', 'code');
+    params.set('client_id', clientId);
+    params.set('scope', scope);
+    params.set('redirect_uri', redirectUri);
+    params.set('state', state);
+
+    const url = `https://accounts.spotify.com/authorize?${params.toString()}`;
+    res.redirect(url);
+  } catch (e) {
+    console.error('Spotify auth error:', e.message);
+    res.status(500).json({ error: 'Failed to start Spotify auth' });
+  }
+});
+
+// --- OAuth callback & token exchange ---
+router.get('/callback', async (req, res) => {
+  try {
+    const clientId = process.env.SPOTIFY_CLIENT_ID;
+    const clientSecret = process.env.SPOTIFY_CLIENT_SECRET;
+    const redirectUri = process.env.SPOTIFY_REDIRECT_URI || `${getServerBaseUrl(req)}/api/spotify/callback`;
+    if (!clientId || !clientSecret) return res.status(500).send('Spotify credentials not configured');
+
+    const { code, state } = req.query;
+    const stateCookie = getCookie(req, 'spotify_oauth_state');
+    if (!state || !stateCookie || state !== stateCookie) {
+      return res.status(400).send('Invalid OAuth state');
+    }
+
+    const credentials = Buffer.from(`${clientId}:${clientSecret}`).toString('base64');
+    const params = new URLSearchParams();
+    params.set('grant_type', 'authorization_code');
+    params.set('code', code);
+    params.set('redirect_uri', redirectUri);
+
+    const tokenResp = await axios.post(
+      'https://accounts.spotify.com/api/token',
+      params.toString(),
+      { headers: { Authorization: `Basic ${credentials}`, 'Content-Type': 'application/x-www-form-urlencoded' } }
+    );
+
+  const { access_token, refresh_token, expires_in } = tokenResp.data || {};
+    if (!access_token) return res.status(502).send('No access token from Spotify');
+
+  // Set cookies (SameSite=None + Secure for cross-site requests)
+  setCookie(res, 'spotify_access_token', access_token, { maxAge: (expires_in || 3600) * 1000, sameSite: 'None', secure: true });
+  if (refresh_token) setCookie(res, 'spotify_refresh_token', refresh_token, { maxAge: 30 * 24 * 3600 * 1000, sameSite: 'None', secure: true });
+    // Clear state cookie
+    clearCookie(res, 'spotify_oauth_state');
+
+    const frontend = getFrontendUrl(req);
+    // Redirect to Judge page by default
+    const redirectTarget = frontend === '/' ? '/judge' : `${frontend.replace(/\/$/, '')}/judge`;
+    res.redirect(redirectTarget);
+  } catch (e) {
+    console.error('Spotify callback error:', e.response?.data || e.message);
+    res.status(500).send('Spotify OAuth failed');
+  }
+});
+
+// --- Current user profile (check auth) ---
+router.get('/me', async (req, res) => {
+  try {
+    const bearer = req.headers.authorization?.replace(/^Bearer\s+/i, '') || getCookie(req, 'spotify_access_token');
+    if (!bearer) return res.status(401).json({ error: 'Not authenticated' });
+    const r = await axios.get('https://api.spotify.com/v1/me', { headers: { Authorization: `Bearer ${bearer}` } });
+    res.json(r.data);
+  } catch (e) {
+    const status = e.response?.status || 500;
+    if (status === 401) return res.status(401).json({ error: 'Unauthorized' });
+    console.error('Spotify me error:', e.response?.data || e.message);
+    res.status(500).json({ error: 'Failed to fetch profile' });
+  }
+});
+
+// --- User top tracks with refresh handling ---
+router.get('/me/top-tracks', async (req, res) => {
+  try {
+    const clientId = process.env.SPOTIFY_CLIENT_ID;
+    const clientSecret = process.env.SPOTIFY_CLIENT_SECRET;
+    const limit = Math.min(parseInt(req.query.limit || '20', 10), 50);
+    let accessToken = req.headers.authorization?.replace(/^Bearer\s+/i, '') || getCookie(req, 'spotify_access_token');
+    const refreshToken = getCookie(req, 'spotify_refresh_token');
+    if (!accessToken && !refreshToken) return res.status(401).json({ error: 'Not authenticated' });
+
+    async function fetchTop(token) {
+      return axios.get(`https://api.spotify.com/v1/me/top/tracks?limit=${limit}`, { headers: { Authorization: `Bearer ${token}` } });
+    }
+
+    try {
+      const r = await fetchTop(accessToken);
+      return res.json(r.data);
+    } catch (e) {
+      if (e.response?.status === 401 && refreshToken && clientId && clientSecret) {
+        try {
+          const refreshed = await refreshSpotifyAccessToken(refreshToken, clientId, clientSecret);
+          if (refreshed.access_token) {
+            accessToken = refreshed.access_token;
+            setCookie(res, 'spotify_access_token', accessToken, { maxAge: (refreshed.expires_in || 3600) * 1000 });
+            const r2 = await fetchTop(accessToken);
+            return res.json(r2.data);
+          }
+        } catch (rf) {
+          console.warn('Spotify refresh failed:', rf.response?.data || rf.message);
+        }
+      }
+      const status = e.response?.status || 500;
+      return res.status(status).json({ error: 'Failed to fetch top tracks' });
+    }
+  } catch (e) {
+    console.error('Top tracks error:', e.response?.data || e.message);
+    res.status(500).json({ error: 'Failed to fetch top tracks' });
+  }
+});
+
 // Get Spotify client credentials token
 router.post('/token', async (req, res) => {
   try {
@@ -520,6 +714,68 @@ router.get('/audio-features', async (req, res) => {
   } catch (error) {
     console.error('Spotify audio-features error:', error.response?.data || error.message);
     res.status(500).json({ error: 'Failed to get audio features', details: error.response?.data || error.message });
+  }
+});
+
+// Batch audio features for up to 100 track IDs
+router.get('/audio-features-batch', async (req, res) => {
+  try {
+    const ids = (req.query.ids || '').split(',').map(s => s.trim()).filter(Boolean);
+    if (ids.length === 0) return res.status(400).json({ error: 'ids is required' });
+    if (ids.length > 100) return res.status(400).json({ error: 'Up to 100 ids allowed' });
+
+    const clientId = process.env.SPOTIFY_CLIENT_ID;
+    const clientSecret = process.env.SPOTIFY_CLIENT_SECRET;
+    if (!clientId || !clientSecret) return res.status(501).json({ error: 'Spotify credentials not configured' });
+
+    const credentials = Buffer.from(`${clientId}:${clientSecret}`).toString('base64');
+    const tokenResp = await axios.post(
+      'https://accounts.spotify.com/api/token',
+      'grant_type=client_credentials',
+      { headers: { Authorization: `Basic ${credentials}`, 'Content-Type': 'application/x-www-form-urlencoded' } }
+    );
+    const accessToken = tokenResp.data.access_token;
+    const headers = { headers: { Authorization: `Bearer ${accessToken}` } };
+
+    const featuresResp = await axios.get(
+      `https://api.spotify.com/v1/audio-features?ids=${encodeURIComponent(ids.join(','))}`,
+      headers
+    );
+    res.json(featuresResp.data);
+  } catch (e) {
+    console.error('Batch audio features error:', e.response?.data || e.message);
+    res.status(500).json({ error: 'Failed to get batch audio features' });
+  }
+});
+
+// Batch artists lookup to derive genres
+router.get('/artists', async (req, res) => {
+  try {
+    const ids = (req.query.ids || '').split(',').map(s => s.trim()).filter(Boolean);
+    if (ids.length === 0) return res.status(400).json({ error: 'ids is required' });
+    if (ids.length > 50) return res.status(400).json({ error: 'Up to 50 ids allowed' });
+
+    const clientId = process.env.SPOTIFY_CLIENT_ID;
+    const clientSecret = process.env.SPOTIFY_CLIENT_SECRET;
+    if (!clientId || !clientSecret) return res.status(501).json({ error: 'Spotify credentials not configured' });
+
+    const credentials = Buffer.from(`${clientId}:${clientSecret}`).toString('base64');
+    const tokenResp = await axios.post(
+      'https://accounts.spotify.com/api/token',
+      'grant_type=client_credentials',
+      { headers: { Authorization: `Basic ${credentials}`, 'Content-Type': 'application/x-www-form-urlencoded' } }
+    );
+    const accessToken = tokenResp.data.access_token;
+    const headers = { headers: { Authorization: `Bearer ${accessToken}` } };
+
+    const artistsResp = await axios.get(
+      `https://api.spotify.com/v1/artists?ids=${encodeURIComponent(ids.join(','))}`,
+      headers
+    );
+    res.json(artistsResp.data);
+  } catch (e) {
+    console.error('Batch artists error:', e.response?.data || e.message);
+    res.status(500).json({ error: 'Failed to get artists' });
   }
 });
 

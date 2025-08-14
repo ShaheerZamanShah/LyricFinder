@@ -14,7 +14,19 @@ const PORT = process.env.PORT || 5000;
 
 // Middleware
 app.use(helmet());
-app.use(cors());
+// CORS: allow credentials for cookie-based flows (e.g., Spotify OAuth cookies)
+const FRONTEND_URL = process.env.FRONTEND_URL; // e.g., https://your-frontend.example.com
+const corsOptions = {
+  origin: function(origin, callback) {
+    // Allow no-origin (same-origin or server-to-server) and configured frontend URL; otherwise allow localhost for dev
+    if (!origin) return callback(null, true);
+    if (FRONTEND_URL && origin === FRONTEND_URL) return callback(null, true);
+    if (/^https?:\/\/localhost(?::\d+)?$/.test(origin)) return callback(null, true);
+    return callback(null, false);
+  },
+  credentials: true,
+};
+app.use(cors(corsOptions));
 app.use(express.json({ limit: '1mb' }));
 app.use(express.urlencoded({ extended: true, limit: '1mb' }));
 
