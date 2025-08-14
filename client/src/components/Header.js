@@ -17,7 +17,7 @@ const Header = ({ isSearchCollapsed, onCollapseChange }) => {
 
   return (
     <header className="bg-black/20 backdrop-blur-md border-b border-white/20 px-4 md:px-6 py-4 shadow-lg sticky top-0 z-30">
-      <div className="flex justify-between items-center">
+  <div className="flex justify-between items-center">
         <div className="flex items-center gap-3">
           <Link to="/" className="flex items-center gap-2 text-white text-2xl font-bold no-underline drop-shadow-lg">
             <Music size={32} />
@@ -37,15 +37,24 @@ const Header = ({ isSearchCollapsed, onCollapseChange }) => {
           )}
         </div>
 
-        {/* Theme Toggle */}
-        <button
-          onClick={toggleTheme}
-          className="flex items-center gap bg-white/10 hover:bg-white/20 backdrop-blur-sm border border-white/20 px-4 py-2 rounded-lg text-white transition-all duration-300 hover:scale-105"
-          aria-label="Toggle theme"
-        >
-          {getThemeIcon()}
-          <span className="text-sm font-medium"></span>
-        </button>
+        {/* Right side actions */}
+        <div className="flex items-center gap-3">
+          <button
+            onClick={toggleTheme}
+            className="flex items-center gap bg-white/10 hover:bg-white/20 backdrop-blur-sm border border-white/20 px-4 py-2 rounded-lg text-white transition-all duration-300 hover:scale-105"
+            aria-label="Toggle theme"
+            title="Toggle theme"
+          >
+            {getThemeIcon()}
+          </button>
+          <Link
+            to="/judge"
+            className="inline-flex items-center bg-indigo-500/80 hover:bg-indigo-500 text-white px-4 py-2 rounded-lg border border-white/20 transition-all duration-300 hover:scale-105 no-underline"
+            aria-label="Go to Judge page"
+          >
+            Judge
+          </Link>
+        </div>
       </div>
     </header>
   );
