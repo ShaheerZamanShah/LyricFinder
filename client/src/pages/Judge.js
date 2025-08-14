@@ -20,7 +20,9 @@ export default function Judge() {
   const fetchProfile = useCallback(async () => {
     try {
       setError('');
-  const r = await fetch(API_ENDPOINTS.SPOTIFY_ME, { credentials: 'include' });
+      const token = window.localStorage.getItem('spotify_token');
+      const headers = token ? { Authorization: `Bearer ${token}` } : undefined;
+      const r = await fetch(API_ENDPOINTS.SPOTIFY_ME, { credentials: 'include', headers });
       if (!r.ok) return setAuth({ status: r.status === 401 ? 'unauth' : 'error', profile: null });
       const data = await r.json();
       setAuth({ status: 'ok', profile: data });
@@ -32,7 +34,9 @@ export default function Judge() {
   const fetchTop = useCallback(async () => {
     try {
       setLoading(true); setError(''); setTop([]); setAnalysis(null);
-  const r = await fetch(`${API_ENDPOINTS.SPOTIFY_ME_TOP_TRACKS}?limit=20`, { credentials: 'include' });
+      const token = window.localStorage.getItem('spotify_token');
+      const headers = token ? { Authorization: `Bearer ${token}` } : undefined;
+      const r = await fetch(`${API_ENDPOINTS.SPOTIFY_ME_TOP_TRACKS}?limit=20`, { credentials: 'include', headers });
       if (!r.ok) throw new Error('Failed to fetch top tracks');
       const data = await r.json();
       const items = (data.items || []).map(t => ({
