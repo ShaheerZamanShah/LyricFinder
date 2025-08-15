@@ -44,7 +44,7 @@ export default function Stats() {
       const token = window.localStorage.getItem('spotify_token');
       const headers = token ? { Authorization: `Bearer ${token}` } : undefined;
       
-      console.log('Fetching profile from:', STATS_API_ENDPOINTS.SPOTIFY_ME);
+  console.log('Fetching profile from:', API_ENDPOINTS.SPOTIFY_ME);
       const r = await fetch(API_ENDPOINTS.SPOTIFY_ME, { 
         credentials: 'include', 
         headers,
@@ -74,7 +74,7 @@ export default function Stats() {
       setTopTracks([]); 
       setAnalysis(null);
       
-      console.log('Fetching top tracks from:', STATS_API_ENDPOINTS.SPOTIFY_ME_TOP_TRACKS);
+  console.log('Fetching top tracks from:', API_ENDPOINTS.SPOTIFY_ME_TOP_TRACKS);
       const r = await fetch(`${API_ENDPOINTS.SPOTIFY_ME_TOP_TRACKS}?time_range=${selectedTimeRange}`, {
         credentials: 'include',
         mode: 'cors'
@@ -83,7 +83,7 @@ export default function Stats() {
       console.log('Top tracks response status:', r.status);
       if (r.status === 401) {
         console.log('Unauthorized, redirecting to auth');
-        window.location.href = STATS_API_ENDPOINTS.SPOTIFY_AUTH;
+  window.location.href = API_ENDPOINTS.SPOTIFY_AUTH;
         return;
       }
       
@@ -120,7 +120,7 @@ export default function Stats() {
       setError(''); 
       setTopArtists([]); 
       
-      console.log('Fetching top artists from:', STATS_API_ENDPOINTS.SPOTIFY_ME_TOP_ARTISTS);
+  console.log('Fetching top artists from:', API_ENDPOINTS.SPOTIFY_ME_TOP_ARTISTS);
       const r = await fetch(`${API_ENDPOINTS.SPOTIFY_ME_TOP_ARTISTS}?time_range=${selectedTimeRange}`, {
         credentials: 'include',
         mode: 'cors'
@@ -129,7 +129,7 @@ export default function Stats() {
       console.log('Top artists response status:', r.status);
       if (r.status === 401) {
         console.log('Unauthorized, redirecting to auth');
-        window.location.href = STATS_API_ENDPOINTS.SPOTIFY_AUTH;
+  window.location.href = API_ENDPOINTS.SPOTIFY_AUTH;
         return;
       }
       
