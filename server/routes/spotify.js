@@ -782,20 +782,25 @@ router.get('/audio-features-batch', async (req, res) => {
           return res.status(403).json({ error: 'No accessible tracks for audio features', inaccessible_ids: results.inaccessible_ids });
         }
         return res.json({ audio_features: results.audio_features, inaccessible_ids: results.inaccessible_ids });
+      } else {
+        // Other errors
+        console.error('Batch audio features error:', {
+          message: e.message,
+          response: e.response?.data,
+          status: e.response?.status,
+          headers: e.response?.headers,
+          config: e.config,
+        });
+        return res.status(500).json({
+          error: 'Failed to get batch audio features',
+          details: e.response?.data || e.message
+        });
       }
-      // Other errors
-      console.error('Batch audio features error:', {
-        message: e.message,
-        response: e.response?.data,
-        status: e.response?.status,
-        headers: e.response?.headers,
-        config: e.config,
-      });
-      return res.status(500).json({
-        error: 'Failed to get batch audio features',
-        details: e.response?.data || e.message
-      });
     }
+  } catch (err) {
+    // Top-level error catch
+    console.error('audio-features-batch route error:', err);
+    return res.status(500).json({ error: 'Internal server error', details: err.message });
   }
 });
 
