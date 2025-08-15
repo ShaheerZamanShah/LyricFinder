@@ -4,7 +4,7 @@
   "outputDirectory": "client/build",
   "framework": "create-react-app",
   "routes": [
-    { "src": "/manifest.json", "dest": "/manifest.json" },
+  { "src": "/manifest.json", "dest": "/client/build/manifest.json" },
     { "src": "/favicon.ico", "dest": "/favicon.ico" },
     { "src": "/logo192.png", "dest": "/logo192.png" },
     { "src": "/logo512.png", "dest": "/logo512.png" },
