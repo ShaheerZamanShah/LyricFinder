@@ -373,6 +373,33 @@ export default function Stats() {
                     </li>
                   ))}
                 </ul>
+                {/* Top Genres Section */}
+                <div className="mt-8">
+                  <h3 className="text-lg font-semibold text-white mb-3 flex items-center gap-2">
+                    <Sparkles className="w-5 h-5 text-purple-400"/> Top Genres
+                  </h3>
+                  <div className="flex flex-wrap gap-2">
+                    {(() => {
+                      // Aggregate genres from topArtists
+                      const genreCounts = {};
+                      topArtists.forEach(a => {
+                        (a.genres || []).forEach(g => {
+                          genreCounts[g] = (genreCounts[g] || 0) + 1;
+                        });
+                      });
+                      return Object.entries(genreCounts)
+                        .sort((a, b) => b[1] - a[1])
+                        .slice(0, 8)
+                        .map(([genre, count]) => (
+                          <span key={genre} className="text-sm text-white/90 border border-white/15 bg-gradient-to-r from-purple-500/20 to-blue-500/20 rounded-full px-3 py-1.5 flex items-center gap-1">
+                            <div className="w-2 h-2 rounded-full bg-gradient-to-r from-purple-400 to-blue-400"></div>
+                            {genre}
+                            <span className="ml-1 text-white/60">({count})</span>
+                          </span>
+                        ));
+                    })()}
+                  </div>
+                </div>
               </div>
             ) : (
               <div className="text-white/70 text-center py-8">Connect Spotify to see your top artists.</div>
