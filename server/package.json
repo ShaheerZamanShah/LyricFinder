@@ -1,0 +1,32 @@
+{
+  "name": "lyric-finder-server",
+  "version": "1.0.0",
+  "description": "Backend server for LyricFinder app",
+  "main": "server.js",
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "scripts": {
+  "start": "node server.js",
+  "dev": "nodemon server.js"
+  },
+  "dependencies": {
+    "axios": "^1.7.7",
+    "cheerio": "^1.0.0",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.5",
+    "express": "^4.19.2",
+  "express-rate-limit": "^7.4.0",
+  "hangul-romanization": "^1.0.1",
+  "hebrew-transliteration": "^2.8.4",
+    "helmet": "^7.1.0",
+    "mongoose": "^8.6.0",
+    "pinyin": "^2.11.2",
+    "transliteration": "^2.3.5",
+  "wanakana": "^5.3.1"
+  },
+  "devDependencies": {
+  "nodemon": "^3.1.4",
+  "mongodb-memory-server": "^10.1.4"
+  }
+}

@@ -1,0 +1,32 @@
+{
+  "name": "lyric-finder-mern",
+  "version": "1.0.0",
+  "description": "MERN stack application for finding song lyrics using AI",
+  "main": "server/server.js",
+  "scripts": {
+    "dev": "concurrently \"npm run server\" \"npm run client\"",
+    "server": "cd server && npm run dev",
+    "client": "cd client && npm start",
+    "build": "cd client && npm run build",
+    "build:server": "cd server && npm install",
+    "install-server": "cd server && npm install",
+    "install-client": "cd client && npm install",
+    "install-all": "npm run install-server && npm run install-client",
+    "start": "cd server && npm start",
+    "heroku-postbuild": "npm run install-all && npm run build"
+  },
+  "keywords": [
+    "mern",
+    "lyrics",
+    "ai",
+    "music",
+    "react",
+    "nodejs",
+    "mongodb"
+  ],
+  "author": "",
+  "license": "MIT",
+  "devDependencies": {
+    "concurrently": "^8.2.2"
+  }
+}
