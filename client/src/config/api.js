@@ -33,13 +33,13 @@ export const API_ENDPOINTS = {
   RATINGS: `${API_BASE_URL}/api/ratings`,
 };
 
-// For Judge page, use relative URLs to work with deployed frontend
+// For Judge page, use the full backend URLs
 export const JUDGE_API_ENDPOINTS = {
-  SPOTIFY_AUTH: '/api/spotify/auth',
-  SPOTIFY_ME: '/api/spotify/me',
-  SPOTIFY_ME_TOP_TRACKS: '/api/spotify/me/top-tracks',
-  SPOTIFY_AUDIO_FEATURES_BATCH: '/api/spotify/audio-features-batch',
-  SPOTIFY_ARTISTS: '/api/spotify/artists',
+  SPOTIFY_AUTH: `${API_BASE_URL}/api/spotify/auth`,
+  SPOTIFY_ME: `${API_BASE_URL}/api/spotify/me`,
+  SPOTIFY_ME_TOP_TRACKS: `${API_BASE_URL}/api/spotify/me/top-tracks`,
+  SPOTIFY_AUDIO_FEATURES_BATCH: `${API_BASE_URL}/api/spotify/audio-features-batch`,
+  SPOTIFY_ARTISTS: `${API_BASE_URL}/api/spotify/artists`,
 };
 
 export default API_CONFIG;
