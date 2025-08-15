@@ -724,17 +724,24 @@ router.get('/audio-features-batch', async (req, res) => {
     if (ids.length === 0) return res.status(400).json({ error: 'ids is required' });
     if (ids.length > 100) return res.status(400).json({ error: 'Up to 100 ids allowed' });
 
-    const clientId = process.env.SPOTIFY_CLIENT_ID;
-    const clientSecret = process.env.SPOTIFY_CLIENT_SECRET;
-    if (!clientId || !clientSecret) return res.status(501).json({ error: 'Spotify credentials not configured' });
-
-    const credentials = Buffer.from(`${clientId}:${clientSecret}`).toString('base64');
-    const tokenResp = await axios.post(
-      'https://accounts.spotify.com/api/token',
-      'grant_type=client_credentials',
-      { headers: { Authorization: `Basic ${credentials}`, 'Content-Type': 'application/x-www-form-urlencoded' } }
-    );
-    const accessToken = tokenResp.data.access_token;
+    // Try user access token first
+    let accessToken = req.headers.authorization?.replace(/^Bearer\s+/i, '') || (req.cookies ? req.cookies.spotify_access_token : null);
+    let usedUserToken = false;
+    if (accessToken) {
+      usedUserToken = true;
+    } else {
+      // Fallback to client credentials
+      const clientId = process.env.SPOTIFY_CLIENT_ID;
+      const clientSecret = process.env.SPOTIFY_CLIENT_SECRET;
+      if (!clientId || !clientSecret) return res.status(501).json({ error: 'Spotify credentials not configured' });
+      const credentials = Buffer.from(`${clientId}:${clientSecret}`).toString('base64');
+      const tokenResp = await axios.post(
+        'https://accounts.spotify.com/api/token',
+        'grant_type=client_credentials',
+        { headers: { Authorization: `Basic ${credentials}`, 'Content-Type': 'application/x-www-form-urlencoded' } }
+      );
+      accessToken = tokenResp.data.access_token;
+    }
     const headers = { headers: { Authorization: `Bearer ${accessToken}` } };
 
     const featuresResp = await axios.get(
