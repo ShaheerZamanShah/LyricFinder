@@ -103,6 +103,17 @@ export default function Judge() {
 
   const buttonBase = 'inline-flex items-center gap-2 rounded-lg border border-white/15 bg-white/5 hover:bg-white/10 text-white px-4 py-2 transition-colors';
 
+  const disconnectSpotify = useCallback(() => {
+    window.localStorage.removeItem('spotify_token');
+    // Attempt to clear cookies (will only work for same-origin)
+    document.cookie = 'spotify_access_token=; Max-Age=0; path=/;';
+    document.cookie = 'spotify_refresh_token=; Max-Age=0; path=/;';
+    setAuth({ status: 'unauth', profile: null });
+    setTop([]);
+    setAnalysis(null);
+    setError('');
+  }, []);
+
   return (
     <div className="max-w-6xl mx-auto">
       <section className={classNames('rounded-2xl border border-white/15 bg-black/30 backdrop-blur-md p-6 md:p-8 shadow-xl')}
@@ -114,7 +125,11 @@ export default function Judge() {
             </h1>
             <p className="text-white/80">Connect your Spotify, fetch your top tracks, and let the Judge analyze your taste.</p>
           </div>
-          {auth.status !== 'ok' && (
+          {auth.status === 'ok' ? (
+            <button className={buttonBase} onClick={disconnectSpotify} aria-label="Disconnect Spotify">
+              <LogIn className="w-4 h-4 rotate-180" /> Disconnect Spotify
+            </button>
+          ) : (
             <button className={buttonBase} onClick={startAuth} aria-label="Connect Spotify">
               <LogIn className="w-4 h-4" /> Connect Spotify
             </button>
