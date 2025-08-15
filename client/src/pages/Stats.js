@@ -44,6 +44,7 @@ export default function Stats() {
       const token = window.localStorage.getItem('spotify_token');
       const headers = token ? { Authorization: `Bearer ${token}` } : undefined;
       
+      console.log('Fetching profile from:', STATS_API_ENDPOINTS.SPOTIFY_ME);
       const r = await fetch(API_ENDPOINTS.SPOTIFY_ME, { 
         credentials: 'include', 
         headers,
@@ -73,6 +74,7 @@ export default function Stats() {
       setTopTracks([]); 
       setAnalysis(null);
       
+      console.log('Fetching top tracks from:', STATS_API_ENDPOINTS.SPOTIFY_ME_TOP_TRACKS);
       const r = await fetch(`${API_ENDPOINTS.SPOTIFY_ME_TOP_TRACKS}?time_range=${selectedTimeRange}`, {
         credentials: 'include',
         mode: 'cors'
@@ -118,6 +120,7 @@ export default function Stats() {
       setError(''); 
       setTopArtists([]); 
       
+      console.log('Fetching top artists from:', STATS_API_ENDPOINTS.SPOTIFY_ME_TOP_ARTISTS);
       const r = await fetch(`${API_ENDPOINTS.SPOTIFY_ME_TOP_ARTISTS}?time_range=${selectedTimeRange}`, {
         credentials: 'include',
         mode: 'cors'

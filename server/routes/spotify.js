@@ -155,9 +155,9 @@ router.get('/callback', async (req, res) => {
     // Clear state cookie
     clearCookie(res, 'spotify_oauth_state');
 
-    // Redirect to the deployed frontend Judge page
+    // Redirect to the deployed frontend Stats page
     const frontendUrl = process.env.FRONTEND_URL || 'https://lyric-finder-alpha.vercel.app';
-    const redirectTarget = `${frontendUrl}/judge`;
+    const redirectTarget = `${frontendUrl}/stats`;
     res.redirect(redirectTarget);
   } catch (e) {
     console.error('Spotify callback error:', e.response?.data || e.message);
@@ -186,6 +186,7 @@ router.get('/me/top-tracks', async (req, res) => {
     const clientId = process.env.SPOTIFY_CLIENT_ID;
     const clientSecret = process.env.SPOTIFY_CLIENT_SECRET;
     const limit = Math.min(parseInt(req.query.limit || '20', 10), 50);
+    const timeRange = req.query.time_range || 'medium_term'; // short_term, medium_term, long_term
     let accessToken = req.headers.authorization?.replace(/^Bearer\s+/i, '') || getCookie(req, 'spotify_access_token');
     const refreshToken = getCookie(req, 'spotify_refresh_token');
     if (!accessToken && !refreshToken) {
@@ -194,7 +195,7 @@ router.get('/me/top-tracks', async (req, res) => {
     }
 
     async function fetchTop(token) {
-      return axios.get(`https://api.spotify.com/v1/me/top/tracks?limit=${limit}`, { headers: { Authorization: `Bearer ${token}` } });
+      return axios.get(`https://api.spotify.com/v1/me/top/tracks?limit=${limit}&time_range=${timeRange}`, { headers: { Authorization: `Bearer ${token}` } });
     }
 
     try {
@@ -225,6 +226,55 @@ router.get('/me/top-tracks', async (req, res) => {
   } catch (e) {
     console.error('Top tracks error (outer catch):', e.response?.data || e.message);
     res.status(500).json({ error: 'Failed to fetch top tracks', details: e.response?.data || e.message });
+  }
+});
+
+// --- User top artists with refresh handling ---
+router.get('/me/top-artists', async (req, res) => {
+  try {
+    const clientId = process.env.SPOTIFY_CLIENT_ID;
+    const clientSecret = process.env.SPOTIFY_CLIENT_SECRET;
+    const limit = Math.min(parseInt(req.query.limit || '20', 10), 50);
+    const timeRange = req.query.time_range || 'medium_term'; // short_term, medium_term, long_term
+    let accessToken = req.headers.authorization?.replace(/^Bearer\s+/i, '') || getCookie(req, 'spotify_access_token');
+    const refreshToken = getCookie(req, 'spotify_refresh_token');
+    if (!accessToken && !refreshToken) {
+      console.error('No access or refresh token found for user');
+      return res.status(401).json({ error: 'Not authenticated' });
+    }
+
+    async function fetchTop(token) {
+      return axios.get(`https://api.spotify.com/v1/me/top/artists?limit=${limit}&time_range=${timeRange}`, { headers: { Authorization: `Bearer ${token}` } });
+    }
+
+    try {
+      const r = await fetchTop(accessToken);
+      return res.json(r.data);
+    } catch (e) {
+      console.error('Error fetching top artists from Spotify:', {
+        status: e.response?.status,
+        data: e.response?.data,
+        message: e.message
+      });
+      if (e.response?.status === 401 && refreshToken && clientId && clientSecret) {
+        try {
+          const refreshed = await refreshSpotifyAccessToken(refreshToken, clientId, clientSecret);
+          if (refreshed.access_token) {
+            accessToken = refreshed.access_token;
+            setCookie(res, 'spotify_access_token', accessToken, { maxAge: (refreshed.expires_in || 3600) * 1000 });
+            const r2 = await fetchTop(accessToken);
+            return res.json(r2.data);
+          }
+        } catch (rf) {
+          console.warn('Spotify refresh failed:', rf.response?.data || rf.message);
+        }
+      }
+      const status = e.response?.status || 500;
+      return res.status(status).json({ error: 'Failed to fetch top artists', details: e.response?.data || e.message });
+    }
+  } catch (e) {
+    console.error('Top artists error (outer catch):', e.response?.data || e.message);
+    res.status(500).json({ error: 'Failed to fetch top artists', details: e.response?.data || e.message });
   }
 });
 

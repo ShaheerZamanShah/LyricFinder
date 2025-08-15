@@ -43,14 +43,24 @@ const Header = ({ isSearchCollapsed, onCollapseChange }) => {
 
         {/* Right side actions */}
         <div className="flex items-center gap-3">
-          <Link
-            to="/judge"
-            className="inline-flex items-center px-4 py-2 rounded-lg border border-white/20 bg-white/10 hover:bg-white/20 text-white transition-all duration-200 no-underline"
-            aria-label="Go to Judge page"
-            title="Judge"
-          >
-            Judge
-          </Link>
+          <nav className="hidden md:flex items-center space-x-8">
+            <Link
+              to="/"
+              className="text-white/80 hover:text-white transition-colors duration-200"
+              aria-label="Go to Home page"
+              title="Home"
+            >
+              Home
+            </Link>
+            <Link
+                to="/stats"
+                className="text-white/80 hover:text-white transition-colors duration-200"
+                aria-label="Go to Stats page"
+                title="Stats"
+              >
+                Stats
+            </Link>
+          </nav>
           <button
             onClick={toggleTheme}
             className="flex items-center gap bg-white/10 hover:bg-white/20 backdrop-blur-sm border border-white/20 px-4 py-2 rounded-lg text-white transition-all duration-200"

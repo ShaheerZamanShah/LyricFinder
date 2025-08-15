@@ -17,6 +17,7 @@ export const API_ENDPOINTS = {
   SPOTIFY_SEARCH: `${API_BASE_URL}/api/spotify/search`,
   SPOTIFY_ME: `${API_BASE_URL}/api/spotify/me`,
   SPOTIFY_ME_TOP_TRACKS: `${API_BASE_URL}/api/spotify/me/top-tracks`,
+  SPOTIFY_ME_TOP_ARTISTS: `${API_BASE_URL}/api/spotify/me/top-artists`,
   POPULAR_LYRICS: `${API_BASE_URL}/api/lyrics/popular`,
   GENIUS_DETAILS: `${API_BASE_URL}/api/lyrics/details`,
   SONGS: `${API_BASE_URL}/api/songs`,
@@ -33,11 +34,12 @@ export const API_ENDPOINTS = {
   RATINGS: `${API_BASE_URL}/api/ratings`,
 };
 
-// For Judge page, use the full backend URLs
-export const JUDGE_API_ENDPOINTS = {
+// For Stats page, use the full backend URLs
+export const STATS_API_ENDPOINTS = {
   SPOTIFY_AUTH: `${API_BASE_URL}/api/spotify/auth`,
   SPOTIFY_ME: `${API_BASE_URL}/api/spotify/me`,
   SPOTIFY_ME_TOP_TRACKS: `${API_BASE_URL}/api/spotify/me/top-tracks`,
+  SPOTIFY_ME_TOP_ARTISTS: `${API_BASE_URL}/api/spotify/me/top-artists`,
   SPOTIFY_AUDIO_FEATURES_BATCH: `${API_BASE_URL}/api/spotify/audio-features-batch`,
   SPOTIFY_ARTISTS: `${API_BASE_URL}/api/spotify/artists`,
 };
