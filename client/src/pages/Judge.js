@@ -34,9 +34,11 @@ export default function Judge() {
   const fetchTop = useCallback(async () => {
     try {
       setLoading(true); setError(''); setTop([]); setAnalysis(null);
-      const token = window.localStorage.getItem('spotify_token');
-      const headers = token ? { Authorization: `Bearer ${token}` } : undefined;
-      const r = await fetch(`${API_ENDPOINTS.SPOTIFY_ME_TOP_TRACKS}?limit=20`, { credentials: 'include', headers });
+      const r = await fetch('/api/spotify/me/top-tracks');
+      if (r.status === 401) {
+        window.location.href = '/api/spotify/auth';
+        return;
+      }
       if (!r.ok) throw new Error('Failed to fetch top tracks');
       const data = await r.json();
       const items = (data.items || []).map(t => ({
@@ -60,13 +62,15 @@ export default function Judge() {
   const fetchAnalysis = useCallback(async () => {
     try {
       setLoading(true); setError('');
-      // Derive feature summary via batch endpoints
       const ids = top.map(t => t.id).slice(0, 20);
       if (ids.length === 0) throw new Error('No tracks to analyze');
-  const featuresResp = await fetch(`${API_ENDPOINTS.SPOTIFY_AUDIO_FEATURES_BATCH}?ids=${encodeURIComponent(ids.join(','))}`);
-      const features = (await featuresResp.json()).audio_features || [];
+      // Use recommended batch analysis logic
+      const featuresResp = await fetch(`/api/spotify/audio-features-batch?ids=${ids.join(',')}`);
+      if (!featuresResp.ok) throw new Error(`Audio features error: ${featuresResp.status}`);
+      const featuresData = await featuresResp.json();
+      const features = featuresData.audio_features || featuresData.features || [];
       const artistIds = Array.from(new Set(top.flatMap(t => t.artists?.map(a=>a.id).filter(Boolean) || []))).slice(0, 40);
-  const artistsResp = await fetch(`${API_ENDPOINTS.SPOTIFY_ARTISTS}?ids=${encodeURIComponent(artistIds.join(','))}`);
+      const artistsResp = await fetch(`${API_ENDPOINTS.SPOTIFY_ARTISTS}?ids=${encodeURIComponent(artistIds.join(','))}`);
       const artistsData = (await artistsResp.json())?.artists || [];
 
       const genres = {};
