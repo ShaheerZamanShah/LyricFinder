@@ -750,8 +750,17 @@ router.get('/audio-features-batch', async (req, res) => {
     );
     res.json(featuresResp.data);
   } catch (e) {
-    console.error('Batch audio features error:', e.response?.data || e.message);
-    res.status(500).json({ error: 'Failed to get batch audio features' });
+    console.error('Batch audio features error:', {
+      message: e.message,
+      response: e.response?.data,
+      status: e.response?.status,
+      headers: e.response?.headers,
+      config: e.config,
+    });
+    res.status(500).json({
+      error: 'Failed to get batch audio features',
+      details: e.response?.data || e.message
+    });
   }
 });
 
