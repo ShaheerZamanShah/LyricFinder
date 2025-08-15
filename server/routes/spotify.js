@@ -14,7 +14,6 @@ function parseCookies(req) {
     }
     return acc;
   }, {});
-}
 
 function getCookie(req, name) {
   const all = parseCookies(req);
@@ -33,7 +32,9 @@ function setCookie(res, name, value, opts = {}) {
   if (httpOnly) cookie += '; HttpOnly';
   if (secure) cookie += '; Secure';
   if (typeof maxAge === 'number') cookie += `; Max-Age=${Math.floor(maxAge / 1000)}`;
-  res.setHeader('Set-Cookie', [...(Array.isArray(res.getHeader('Set-Cookie')) ? res.getHeader('Set-Cookie') : res.getHeader('Set-Cookie') ? [res.getHeader('Set-Cookie')] : []), cookie]);
+  const existingCookies = res.getHeader('Set-Cookie') || [];
+  const cookiesArray = Array.isArray(existingCookies) ? existingCookies : [existingCookies].filter(Boolean);
+  res.setHeader('Set-Cookie', [...cookiesArray, cookie]);
 }
 
 function clearCookie(res, name) {
@@ -41,7 +42,6 @@ function clearCookie(res, name) {
 }
 
 function getServerBaseUrl(req) {
-  // Prefer explicit env var, else infer
   const fromEnv = process.env.SERVER_BASE_URL;
   if (fromEnv) return fromEnv.replace(/\/$/, '');
   const proto = (req.headers['x-forwarded-proto'] || req.protocol || 'http').split(',')[0];
@@ -52,7 +52,6 @@ function getServerBaseUrl(req) {
 function getFrontendUrl(req) {
   const fromEnv = process.env.FRONTEND_URL;
   if (fromEnv) return fromEnv;
-  // Default to root of same origin
   return '/';
 }
 
@@ -65,11 +64,27 @@ async function refreshSpotifyAccessToken(refreshToken, clientId, clientSecret) {
     'https://accounts.spotify.com/api/token',
     params.toString(),
     { headers: { Authorization: `Basic ${credentials}`, 'Content-Type': 'application/x-www-form-urlencoded' } }
-  );
-  return resp.data; // { access_token, token_type, scope, expires_in, refresh_token? }
-}
+  });
 
-// --- User OAuth: start auth flow ---
+  module.exports = router;
+router.get('/auth', async (req, res) => {
+  try {
+    const clientId = process.env.SPOTIFY_CLIENT_ID;
+    const redirectUri = process.env.SPOTIFY_REDIRECT_URI || `${getServerBaseUrl(req)}/api/spotify/callback`;
+    if (!clientId) return res.status(500).json({ error: 'Spotify client ID not configured' });
+    const scope = 'user-top-read';
+    // CSRF state
+    const state = Math.random().toString(36).slice(2) + Math.random().toString(36).slice(2);
+    setCookie(res, 'spotify_oauth_state', state, { maxAge: 10 * 60 * 1000 });
+    const params = new URLSearchParams();
+    params.set('response_type', 'code');
+    params.set('client_id', clientId);
+    params.set('scope', scope);
+    params.set('redirect_uri', redirectUri);
+    params.set('state', state);
+    const url = `https://accounts.spotify.com/authorize?${params.toString()}`;
+    res.redirect(url);
+  } catch (e) {
 router.get('/auth', async (req, res) => {
   try {
     const clientId = process.env.SPOTIFY_CLIENT_ID;
@@ -95,8 +110,56 @@ router.get('/auth', async (req, res) => {
     res.status(500).json({ error: 'Failed to start Spotify auth' });
   }
 });
+// Add missing closing braces for any unclosed blocks
+}
+}
+
+module.exports = router;
+// Ensure all route handlers and functions are properly closed
+// Add missing closing braces
+
+}
 
 // --- OAuth callback & token exchange ---
+router.get('/callback', async (req, res) => {
+  try {
+    const clientId = process.env.SPOTIFY_CLIENT_ID;
+  const clientSecret = process.env.SPOTIFY_CLIENT_SECRET;
+  const redirectUri = process.env.SPOTIFY_REDIRECT_URI || `${getServerBaseUrl(req)}/api/spotify/callback`;
+  if (!clientId || !clientSecret) return res.status(500).send('Spotify credentials not configured');
+  const { code, state } = req.query;
+  const stateCookie = getCookie(req, 'spotify_oauth_state');
+  if (!state || !stateCookie || state !== stateCookie) {
+      return res.status(400).send('Invalid OAuth state');
+    }
+
+    const credentials = Buffer.from(`${clientId}:${clientSecret}`).toString('base64');
+  const params = new URLSearchParams();
+  params.set('grant_type', 'authorization_code');
+  params.set('code', code);
+  params.set('redirect_uri', redirectUri);
+
+    const tokenResp = await axios.post(
+      'https://accounts.spotify.com/api/token',
+      params.toString(),
+      { headers: { Authorization: `Basic ${credentials}`, 'Content-Type': 'application/x-www-form-urlencoded' } }
+    );
+    const { access_token, refresh_token, expires_in } = tokenResp.data || {};
+    if (!access_token) return res.status(502).send('No access token from Spotify');
+
+  // Set cookies (SameSite=None + Secure for cross-site requests)
+  setCookie(res, 'spotify_access_token', access_token, { maxAge: (expires_in || 3600) * 1000, sameSite: 'None', secure: true });
+  if (refresh_token) setCookie(res, 'spotify_refresh_token', refresh_token, { maxAge: 30 * 24 * 3600 * 1000, sameSite: 'None', secure: true });
+  // Clear state cookie
+  clearCookie(res, 'spotify_oauth_state');
+
+  const frontend = getFrontendUrl(req);
+  // Redirect to Judge page by default
+  const redirectTarget = frontend === '/' ? '/judge' : `${frontend.replace(/\/$/, '')}/judge`;
+  res.redirect(redirectTarget);
+  } catch (e) {
+    console.error('Spotify callback error:', e.response?.data || e.message);
+    res.status(500).send('Spotify OAuth failed');
 router.get('/callback', async (req, res) => {
   try {
     const clientId = process.env.SPOTIFY_CLIENT_ID;
@@ -145,6 +208,18 @@ router.get('/callback', async (req, res) => {
 router.get('/me', async (req, res) => {
   try {
     const bearer = req.headers.authorization?.replace(/^Bearer\s+/i, '') || getCookie(req, 'spotify_access_token');
+  if (!bearer) return res.status(401).json({ error: 'Not authenticated' });
+  const r = await axios.get('https://api.spotify.com/v1/me', { headers: { Authorization: `Bearer ${bearer}` } });
+  res.json(r.data);
+  } catch (e) {
+    const status = e.response?.status || 500;
+    if (status === 401) return res.status(401).json({ error: 'Unauthorized' });
+    console.error('Spotify me error:', e.response?.data || e.message);
+    res.status(500).json({ error: 'Failed to fetch profile' });
+  }
+router.get('/me', async (req, res) => {
+  try {
+    const bearer = req.headers.authorization?.replace(/^Bearer\s+/i, '') || getCookie(req, 'spotify_access_token');
     if (!bearer) return res.status(401).json({ error: 'Not authenticated' });
     const r = await axios.get('https://api.spotify.com/v1/me', { headers: { Authorization: `Bearer ${bearer}` } });
     res.json(r.data);
@@ -157,6 +232,42 @@ router.get('/me', async (req, res) => {
 });
 
 // --- User top tracks with refresh handling ---
+router.get('/me/top-tracks', async (req, res) => {
+  try {
+    const limit = Math.min(parseInt(req.query.limit || '20', 10), 50);
+    let accessToken = req.headers.authorization?.replace(/^Bearer\s+/i, '') || getCookie(req, 'spotify_access_token');
+    const refreshToken = getCookie(req, 'spotify_refresh_token');
+    if (!accessToken && !refreshToken) return res.status(401).json({ error: 'Not authenticated' });
+    async function fetchTop(token) {
+      return axios.get(`https://api.spotify.com/v1/me/top/tracks?limit=${limit}`, { headers: { Authorization: `Bearer ${token}` } });
+    }
+    try {
+      const r = await fetchTop(accessToken);
+      return res.json(r.data);
+    } catch (e) {
+      if (e.response?.status === 401 && refreshToken) {
+        // Try to refresh token
+        const clientId = process.env.SPOTIFY_CLIENT_ID;
+        const clientSecret = process.env.SPOTIFY_CLIENT_SECRET;
+        try {
+          const refreshed = await refreshSpotifyAccessToken(refreshToken, clientId, clientSecret);
+          if (refreshed.access_token) {
+            accessToken = refreshed.access_token;
+            setCookie(res, 'spotify_access_token', accessToken, { maxAge: (refreshed.expires_in || 3600) * 1000 });
+            const r2 = await fetchTop(accessToken);
+            return res.json(r2.data);
+          }
+        } catch (rf) {
+          console.warn('Spotify refresh failed:', rf.response?.data || rf.message);
+        }
+      }
+      const status = e.response?.status || 500;
+      return res.status(status).json({ error: 'Failed to fetch top tracks' });
+    }
+  } catch (e) {
+    console.error('Top tracks error:', e.response?.data || e.message);
+    res.status(500).json({ error: 'Failed to fetch top tracks' });
+  }
 router.get('/me/top-tracks', async (req, res) => {
   try {
     const limit = Math.min(parseInt(req.query.limit || '20', 10), 50);
@@ -198,6 +309,108 @@ router.get('/me/top-tracks', async (req, res) => {
 });
 
 // Get Spotify client credentials token
+router.post('/token', async (req, res) => {
+  try {
+    const clientId = process.env.SPOTIFY_CLIENT_ID;
+    const clientSecret = process.env.SPOTIFY_CLIENT_SECRET;
+    if (!clientId || !clientSecret) {
+      return res.status(500).json({ error: 'Spotify credentials not configured' });
+    }
+    const credentials = Buffer.from(`${clientId}:${clientSecret}`).toString('base64');
+    const response = await axios.post(
+      'https://accounts.spotify.com/api/token',
+      'grant_type=client_credentials',
+      {
+        headers: {
+          'Authorization': `Basic ${credentials}`,
+          'Content-Type': 'application/x-www-form-urlencoded'
+        }
+      }
+    );
+    res.json({
+      access_token: response.data.access_token,
+      token_type: response.data.token_type,
+      expires_in: response.data.expires_in
+    });
+  } catch (error) {
+    console.error('Spotify token error:', error.response?.data || error.message);
+    res.status(500).json({ error: 'Failed to get Spotify access token', details: error.response?.data || error.message });
+  }
+});
+
+// Search Spotify tracks (simplified endpoint with built-in auth)
+router.get('/search', async (req, res) => {
+  try {
+    const { q, limit = 10 } = req.query;
+    if (!q) {
+      return res.status(400).json({ error: 'Search query required' });
+    }
+  const clientId = process.env.SPOTIFY_CLIENT_ID;
+  const clientSecret = process.env.SPOTIFY_CLIENT_SECRET;
+  if (!clientId || !clientSecret) {
+      return res.status(500).json({ error: 'Spotify credentials not configured' });
+    }
+  // Get access token
+  const credentials = Buffer.from(`${clientId}:${clientSecret}`).toString('base64');
+    
+    const tokenResponse = await axios.post(
+      'https://accounts.spotify.com/api/token',
+      'grant_type=client_credentials',
+      {
+        headers: {
+          'Authorization': `Basic ${credentials}`,
+          'Content-Type': 'application/x-www-form-urlencoded'
+        },
+        timeout: 10000
+      }
+    );
+
+    const accessToken = tokenResponse.data.access_token;
+
+    // Search tracks
+    const response = await axios.get(
+      `https://api.spotify.com/v1/search?q=${encodeURIComponent(q)}&type=track&limit=${limit}`,
+      {
+        headers: {
+          'Authorization': `Bearer ${accessToken}`
+        },
+        timeout: 10000
+      }
+    );
+
+    const tracks = response.data.tracks.items.map(track => ({
+      id: track.id,
+      title: track.name,
+      artist: track.artists[0]?.name || 'Unknown Artist',
+      artists: (track.artists || []).map(a => ({
+        id: a.id,
+        name: a.name,
+        spotify_url: a.external_urls?.spotify
+      })),
+      album: track.album?.name || 'Unknown Album',
+      image: track.album?.images[0]?.url || null,
+      preview_url: track.preview_url,
+      external_url: track.external_urls?.spotify,
+      duration_ms: track.duration_ms,
+      popularity: track.popularity,
+      spotify_id: track.id
+    }));
+
+    res.json({ tracks });
+
+  } catch (error) {
+    console.error('Spotify search error:', error.response?.data || error.message);
+    res.status(500).json({ 
+      error: 'Failed to search Spotify',
+      details: error.response?.data || error.message
+    });
+  }
+});
+
+// Rest of the endpoints remain the same...
+// [Include all other endpoints from your original code]
+
+module.exports = router;
 router.post('/token', async (req, res) => {
   try {
     const clientId = process.env.SPOTIFY_CLIENT_ID;
