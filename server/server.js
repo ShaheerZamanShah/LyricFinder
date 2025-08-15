@@ -13,18 +13,27 @@ app.set('trust proxy', 1);
 const PORT = process.env.PORT || 5000;
 
 // Middleware
-app.use(helmet());
+app.use(helmet({
+  crossOriginResourcePolicy: { policy: "cross-origin" },
+  contentSecurityPolicy: false
+}));
+
 // CORS: allow credentials for cookie-based flows (e.g., Spotify OAuth cookies)
-const FRONTEND_URL = process.env.FRONTEND_URL; // e.g., https://your-frontend.example.com
+const FRONTEND_URL = process.env.FRONTEND_URL || 'https://lyric-finder-alpha.vercel.app';
 const corsOptions = {
   origin: function(origin, callback) {
     // Allow no-origin (same-origin or server-to-server) and configured frontend URL; otherwise allow localhost for dev
     if (!origin) return callback(null, true);
     if (FRONTEND_URL && origin === FRONTEND_URL) return callback(null, true);
     if (/^https?:\/\/localhost(?::\d+)?$/.test(origin)) return callback(null, true);
+    // Allow Vercel preview URLs
+    if (origin && origin.includes('vercel.app')) return callback(null, true);
     return callback(null, false);
   },
   credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
+  exposedHeaders: ['Set-Cookie']
 };
 app.use(cors(corsOptions));
 app.use(express.json({ limit: '1mb' }));

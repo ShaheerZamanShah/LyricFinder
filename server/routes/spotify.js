@@ -5,6 +5,8 @@ const router = express.Router();
 // --- Helpers for OAuth cookies and URLs ---
 function parseCookies(req) {
   const header = req.headers.cookie || '';
+  if (!header) return {};
+  
   return header.split(';').reduce((acc, part) => {
     const idx = part.indexOf('=');
     if (idx > -1) {
@@ -24,16 +26,23 @@ function getCookie(req, name) {
 function setCookie(res, name, value, opts = {}) {
   const {
     httpOnly = true,
-    sameSite = 'Lax',
-    secure = process.env.NODE_ENV === 'production',
+    sameSite = 'None',
+    secure = true,
     maxAge, // ms
     path = '/',
+    domain = undefined,
   } = opts;
+  
   let cookie = `${name}=${encodeURIComponent(value)}; Path=${path}; SameSite=${sameSite}`;
   if (httpOnly) cookie += '; HttpOnly';
   if (secure) cookie += '; Secure';
+  if (domain) cookie += `; Domain=${domain}`;
   if (typeof maxAge === 'number') cookie += `; Max-Age=${Math.floor(maxAge / 1000)}`;
-  res.setHeader('Set-Cookie', [...(Array.isArray(res.getHeader('Set-Cookie')) ? res.getHeader('Set-Cookie') : res.getHeader('Set-Cookie') ? [res.getHeader('Set-Cookie')] : []), cookie]);
+  
+  const existingCookies = res.getHeader('Set-Cookie') || [];
+  const cookieArray = Array.isArray(existingCookies) ? existingCookies : [existingCookies];
+  cookieArray.push(cookie);
+  res.setHeader('Set-Cookie', cookieArray);
 }
 
 function clearCookie(res, name) {
@@ -123,18 +132,32 @@ router.get('/callback', async (req, res) => {
       { headers: { Authorization: `Basic ${credentials}`, 'Content-Type': 'application/x-www-form-urlencoded' } }
     );
 
-  const { access_token, refresh_token, expires_in } = tokenResp.data || {};
+    const { access_token, refresh_token, expires_in } = tokenResp.data || {};
     if (!access_token) return res.status(502).send('No access token from Spotify');
 
-  // Set cookies (SameSite=None + Secure for cross-site requests)
-  setCookie(res, 'spotify_access_token', access_token, { maxAge: (expires_in || 3600) * 1000, sameSite: 'None', secure: true });
-  if (refresh_token) setCookie(res, 'spotify_refresh_token', refresh_token, { maxAge: 30 * 24 * 3600 * 1000, sameSite: 'None', secure: true });
+    // Set cookies with proper domain and path for cross-origin requests
+    const cookieOptions = {
+      maxAge: (expires_in || 3600) * 1000,
+      sameSite: 'None',
+      secure: true,
+      domain: process.env.COOKIE_DOMAIN || undefined,
+      path: '/'
+    };
+    
+    setCookie(res, 'spotify_access_token', access_token, cookieOptions);
+    if (refresh_token) {
+      setCookie(res, 'spotify_refresh_token', refresh_token, {
+        ...cookieOptions,
+        maxAge: 30 * 24 * 3600 * 1000
+      });
+    }
+    
     // Clear state cookie
     clearCookie(res, 'spotify_oauth_state');
 
-    const frontend = getFrontendUrl(req);
-    // Redirect to Judge page by default
-    const redirectTarget = frontend === '/' ? '/judge' : `${frontend.replace(/\/$/, '')}/judge`;
+    // Redirect to the deployed frontend Judge page
+    const frontendUrl = process.env.FRONTEND_URL || 'https://lyric-finder-alpha.vercel.app';
+    const redirectTarget = `${frontendUrl}/judge`;
     res.redirect(redirectTarget);
   } catch (e) {
     console.error('Spotify callback error:', e.response?.data || e.message);

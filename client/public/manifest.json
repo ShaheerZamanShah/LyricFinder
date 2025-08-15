@@ -1,6 +1,7 @@
 {
-  "short_name": "React App",
-  "name": "Create React App Sample",
+  "short_name": "LyricFinder",
+  "name": "LyricFinder - AI-Powered Song Lyrics & Music Analysis",
+  "description": "Find song lyrics, analyze music taste, and discover new music with AI-powered insights",
   "icons": [
     {
       "src": "favicon.ico",
@@ -20,6 +21,9 @@
   ],
   "start_url": ".",
   "display": "standalone",
-  "theme_color": "#000000",
-  "background_color": "#ffffff"
+  "theme_color": "#1db954",
+  "background_color": "#121212",
+  "orientation": "portrait",
+  "categories": ["music", "entertainment", "utilities"],
+  "lang": "en"
 }

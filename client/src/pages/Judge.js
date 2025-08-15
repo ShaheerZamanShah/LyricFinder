@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTheme } from '../contexts/ThemeContext';
-import { API_ENDPOINTS } from '../config/api';
+import { JUDGE_API_ENDPOINTS } from '../config/api';
 import { LogIn, Loader2, Music2, Sparkles, Stars } from 'lucide-react';
 
 function classNames(...xs) { return xs.filter(Boolean).join(' '); }
@@ -14,7 +14,7 @@ export default function Judge() {
   const [analysis, setAnalysis] = useState(null);
 
   const startAuth = useCallback(() => {
-    window.location.href = API_ENDPOINTS.SPOTIFY_AUTH; // server will redirect back to /judge
+    window.location.href = JUDGE_API_ENDPOINTS.SPOTIFY_AUTH; // server will redirect back to /judge
   }, []);
 
   const fetchProfile = useCallback(async () => {
@@ -22,25 +22,58 @@ export default function Judge() {
       setError('');
       const token = window.localStorage.getItem('spotify_token');
       const headers = token ? { Authorization: `Bearer ${token}` } : undefined;
-      const r = await fetch(API_ENDPOINTS.SPOTIFY_ME, { credentials: 'include', headers });
-      if (!r.ok) return setAuth({ status: r.status === 401 ? 'unauth' : 'error', profile: null });
+      
+      console.log('Fetching profile from:', JUDGE_API_ENDPOINTS.SPOTIFY_ME);
+      const r = await fetch(JUDGE_API_ENDPOINTS.SPOTIFY_ME, { 
+        credentials: 'include', 
+        headers,
+        mode: 'cors'
+      });
+      
+      console.log('Profile response status:', r.status);
+      if (!r.ok) {
+        const errorText = await r.text();
+        console.error('Profile error response:', errorText);
+        return setAuth({ status: r.status === 401 ? 'unauth' : 'error', profile: null });
+      }
+      
       const data = await r.json();
+      console.log('Profile data received:', data);
       setAuth({ status: 'ok', profile: data });
     } catch (e) {
+      console.error('Profile fetch error:', e);
       setAuth({ status: 'error', profile: null });
     }
   }, []);
 
   const fetchTop = useCallback(async () => {
     try {
-      setLoading(true); setError(''); setTop([]); setAnalysis(null);
-      const r = await fetch('/api/spotify/me/top-tracks');
+      setLoading(true); 
+      setError(''); 
+      setTop([]); 
+      setAnalysis(null);
+      
+      console.log('Fetching top tracks from:', JUDGE_API_ENDPOINTS.SPOTIFY_ME_TOP_TRACKS);
+      const r = await fetch(JUDGE_API_ENDPOINTS.SPOTIFY_ME_TOP_TRACKS, {
+        credentials: 'include',
+        mode: 'cors'
+      });
+      
+      console.log('Top tracks response status:', r.status);
       if (r.status === 401) {
-        window.location.href = '/api/spotify/auth';
+        console.log('Unauthorized, redirecting to auth');
+        window.location.href = JUDGE_API_ENDPOINTS.SPOTIFY_AUTH;
         return;
       }
-      if (!r.ok) throw new Error('Failed to fetch top tracks');
+      
+      if (!r.ok) {
+        const errorData = await r.json().catch(() => ({}));
+        console.error('Top tracks error response:', errorData);
+        throw new Error(errorData.error || `HTTP ${r.status}: Failed to fetch top tracks`);
+      }
+      
       const data = await r.json();
+      console.log('Top tracks data received:', data);
       const items = (data.items || []).map(t => ({
         id: t.id,
         title: t.name,
@@ -53,7 +86,8 @@ export default function Judge() {
       }));
       setTop(items);
     } catch (e) {
-      setError('Could not load your top tracks. Please try again.');
+      console.error('Top tracks fetch error:', e);
+      setError(e.message || 'Could not load your top tracks. Please try again.');
     } finally {
       setLoading(false);
     }
@@ -61,16 +95,28 @@ export default function Judge() {
 
   const fetchAnalysis = useCallback(async () => {
     try {
-      setLoading(true); setError('');
+      setLoading(true); 
+      setError('');
       const ids = top.map(t => t.id).slice(0, 20);
       if (ids.length === 0) throw new Error('No tracks to analyze');
+      
       // Use recommended batch analysis logic
-      const featuresResp = await fetch(`/api/spotify/audio-features-batch?ids=${ids.join(',')}`);
+      const featuresResp = await fetch(`${JUDGE_API_ENDPOINTS.SPOTIFY_AUDIO_FEATURES_BATCH}?ids=${ids.join(',')}`, {
+        credentials: 'include',
+        mode: 'cors'
+      });
+      
       if (!featuresResp.ok) throw new Error(`Audio features error: ${featuresResp.status}`);
       const featuresData = await featuresResp.json();
       const features = featuresData.audio_features || featuresData.features || [];
+      
       const artistIds = Array.from(new Set(top.flatMap(t => t.artists?.map(a=>a.id).filter(Boolean) || []))).slice(0, 40);
-      const artistsResp = await fetch(`${API_ENDPOINTS.SPOTIFY_ARTISTS}?ids=${encodeURIComponent(artistIds.join(','))}`);
+      const artistsResp = await fetch(`${JUDGE_API_ENDPOINTS.SPOTIFY_ARTISTS}?ids=${encodeURIComponent(artistIds.join(','))}`, {
+        credentials: 'include',
+        mode: 'cors'
+      });
+      
+      if (!artistsResp.ok) throw new Error(`Artists error: ${artistsResp.status}`);
       const artistsData = (await artistsResp.json())?.artists || [];
 
       const genres = {};
@@ -97,7 +143,8 @@ export default function Judge() {
 
       setAnalysis({ summary, topGenres, verdict, roastLevel });
     } catch (e) {
-      setError('Analysis failed. Try again.');
+      console.error('Analysis error:', e);
+      setError(e.message || 'Analysis failed. Try again.');
     } finally {
       setLoading(false);
     }
