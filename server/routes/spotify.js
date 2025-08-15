@@ -75,21 +75,22 @@ router.get('/auth', async (req, res) => {
     const clientId = process.env.SPOTIFY_CLIENT_ID;
     const redirectUri = process.env.SPOTIFY_REDIRECT_URI || `${getServerBaseUrl(req)}/api/spotify/callback`;
     if (!clientId) return res.status(500).json({ error: 'Spotify client ID not configured' });
-    const scope = 'user-top-read';
+  const scope = 'user-top-read user-library-read user-read-private';
 
     // CSRF state
     const state = Math.random().toString(36).slice(2) + Math.random().toString(36).slice(2);
     setCookie(res, 'spotify_oauth_state', state, { maxAge: 10 * 60 * 1000 });
 
-    const params = new URLSearchParams();
-    params.set('response_type', 'code');
-    params.set('client_id', clientId);
-    params.set('scope', scope);
-    params.set('redirect_uri', redirectUri);
-    params.set('state', state);
+  const params = new URLSearchParams();
+  params.set('response_type', 'code');
+  params.set('client_id', clientId);
+  params.set('scope', scope);
+  params.set('redirect_uri', redirectUri);
+  params.set('state', state);
+  params.set('show_dialog', 'true');
 
-    const url = `https://accounts.spotify.com/authorize?${params.toString()}`;
-    res.redirect(url);
+  const url = `https://accounts.spotify.com/authorize?${params.toString()}`;
+  res.redirect(url);
   } catch (e) {
     console.error('Spotify auth error:', e.message);
     res.status(500).json({ error: 'Failed to start Spotify auth' });
