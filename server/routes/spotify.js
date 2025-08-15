@@ -75,22 +75,21 @@ router.get('/auth', async (req, res) => {
     const clientId = process.env.SPOTIFY_CLIENT_ID;
     const redirectUri = process.env.SPOTIFY_REDIRECT_URI || `${getServerBaseUrl(req)}/api/spotify/callback`;
     if (!clientId) return res.status(500).json({ error: 'Spotify client ID not configured' });
-  const scope = 'user-top-read user-library-read user-read-private';
+    const scope = 'user-top-read';
 
     // CSRF state
     const state = Math.random().toString(36).slice(2) + Math.random().toString(36).slice(2);
     setCookie(res, 'spotify_oauth_state', state, { maxAge: 10 * 60 * 1000 });
 
-  const params = new URLSearchParams();
-  params.set('response_type', 'code');
-  params.set('client_id', clientId);
-  params.set('scope', scope);
-  params.set('redirect_uri', redirectUri);
-  params.set('state', state);
-  params.set('show_dialog', 'true');
+    const params = new URLSearchParams();
+    params.set('response_type', 'code');
+    params.set('client_id', clientId);
+    params.set('scope', scope);
+    params.set('redirect_uri', redirectUri);
+    params.set('state', state);
 
-  const url = `https://accounts.spotify.com/authorize?${params.toString()}`;
-  res.redirect(url);
+    const url = `https://accounts.spotify.com/authorize?${params.toString()}`;
+    res.redirect(url);
   } catch (e) {
     console.error('Spotify auth error:', e.message);
     res.status(500).json({ error: 'Failed to start Spotify auth' });
@@ -160,8 +159,6 @@ router.get('/me', async (req, res) => {
 // --- User top tracks with refresh handling ---
 router.get('/me/top-tracks', async (req, res) => {
   try {
-    const clientId = process.env.SPOTIFY_CLIENT_ID;
-    const clientSecret = process.env.SPOTIFY_CLIENT_SECRET;
     const limit = Math.min(parseInt(req.query.limit || '20', 10), 50);
     let accessToken = req.headers.authorization?.replace(/^Bearer\s+/i, '') || getCookie(req, 'spotify_access_token');
     const refreshToken = getCookie(req, 'spotify_refresh_token');
@@ -175,7 +172,10 @@ router.get('/me/top-tracks', async (req, res) => {
       const r = await fetchTop(accessToken);
       return res.json(r.data);
     } catch (e) {
-      if (e.response?.status === 401 && refreshToken && clientId && clientSecret) {
+      if (e.response?.status === 401 && refreshToken) {
+        // Try to refresh token
+        const clientId = process.env.SPOTIFY_CLIENT_ID;
+        const clientSecret = process.env.SPOTIFY_CLIENT_SECRET;
         try {
           const refreshed = await refreshSpotifyAccessToken(refreshToken, clientId, clientSecret);
           if (refreshed.access_token) {
@@ -309,54 +309,88 @@ router.get('/search', async (req, res) => {
 });
 
 // Search Spotify tracks (original endpoint)
-router.get('/search-auth', async (req, res) => {
+router.get('/audio-features-batch', async (req, res) => {
   try {
-    const { q, limit = 10 } = req.query;
-    const accessToken = req.headers.authorization?.replace('Bearer ', '');
-    
-    if (!accessToken) {
-      return res.status(401).json({ error: 'Access token required' });
-    }
-    
-    if (!q) {
-      return res.status(400).json({ error: 'Search query required' });
-    }
+    const ids = (req.query.ids || '').split(',').map(s => s.trim()).filter(Boolean);
+    if (ids.length === 0) return res.status(400).json({ error: 'ids is required' });
+    if (ids.length > 100) return res.status(400).json({ error: 'Up to 100 ids allowed' });
 
-    const response = await axios.get(
-      `https://api.spotify.com/v1/search?q=${encodeURIComponent(q)}&type=track&limit=${limit}`,
-      {
-        headers: {
-          'Authorization': `Bearer ${accessToken}`
-        }
+    // Try user access token first
+    let accessToken = req.headers.authorization?.replace(/^Bearer\s+/i, '') || getCookie(req, 'spotify_access_token');
+    let usedUserToken = false;
+    let userProfile = null;
+    if (accessToken) {
+      // Validate token by calling /me
+      try {
+        const meResp = await axios.get('https://api.spotify.com/v1/me', { headers: { Authorization: `Bearer ${accessToken}` } });
+        userProfile = meResp.data;
+        usedUserToken = true;
+      } catch (e) {
+        // Token invalid or missing scopes
+        console.warn('User token validation failed for /audio-features-batch:', e.response?.data || e.message);
+        return res.status(401).json({ error: 'Spotify user token invalid or missing required scopes', details: e.response?.data || e.message });
       }
-    );
+    } else {
+      // Fallback to client credentials
+      const clientId = process.env.SPOTIFY_CLIENT_ID;
+      const clientSecret = process.env.SPOTIFY_CLIENT_SECRET;
+      if (!clientId || !clientSecret) return res.status(501).json({ error: 'Spotify credentials not configured' });
+      const credentials = Buffer.from(`${clientId}:${clientSecret}`).toString('base64');
+      const tokenResp = await axios.post(
+        'https://accounts.spotify.com/api/token',
+        'grant_type=client_credentials',
+        { headers: { Authorization: `Basic ${credentials}`, 'Content-Type': 'application/x-www-form-urlencoded' } }
+      );
+      accessToken = tokenResp.data.access_token;
+    }
+    const headers = { headers: { Authorization: `Bearer ${accessToken}` } };
 
-    const tracks = response.data.tracks.items.map(track => ({
-      id: track.id,
-      title: track.name,
-      artist: track.artists[0]?.name || 'Unknown Artist',
-      artists: (track.artists || []).map(a => ({
-        id: a.id,
-        name: a.name,
-        spotify_url: a.external_urls?.spotify
-      })),
-      album: track.album?.name || 'Unknown Album',
-      image: track.album?.images[0]?.url || null,
-      preview_url: track.preview_url,
-      external_url: track.external_urls?.spotify,
-      duration_ms: track.duration_ms,
-      popularity: track.popularity,
-      spotify_id: track.id
-    }));
-
-    res.json({ tracks });
-
-  } catch (error) {
-    console.error('Spotify search error:', error.response?.data || error.message);
-    res.status(500).json({ 
-      error: 'Failed to search Spotify',
-      details: error.response?.data || error.message
-    });
+    // Try batch request, if 403, try each track individually and filter out inaccessible ones
+    try {
+      const featuresResp = await axios.get(
+        `https://api.spotify.com/v1/audio-features?ids=${encodeURIComponent(ids.join(','))}`,
+        headers
+      );
+      return res.json(featuresResp.data);
+    } catch (e) {
+      if (e.response?.status === 403 && usedUserToken) {
+        // Some tracks may be inaccessible, try each one individually
+        const results = { audio_features: [], inaccessible_ids: [] };
+        for (const id of ids) {
+          try {
+            const r = await axios.get(`https://api.spotify.com/v1/audio-features/${encodeURIComponent(id)}`, headers);
+            if (r.data && r.data.id) {
+              results.audio_features.push(r.data);
+            } else {
+              results.inaccessible_ids.push(id);
+            }
+          } catch (indErr) {
+            results.inaccessible_ids.push(id);
+          }
+        }
+        if (results.audio_features.length === 0) {
+          return res.status(403).json({ error: 'No accessible tracks for audio features', inaccessible_ids: results.inaccessible_ids });
+        }
+        return res.json({ audio_features: results.audio_features, inaccessible_ids: results.inaccessible_ids });
+      } else {
+        // Other errors
+        console.error('Batch audio features error:', {
+          message: e.message,
+          response: e.response?.data,
+          status: e.response?.status,
+          headers: e.response?.headers,
+          config: e.config,
+        });
+        return res.status(500).json({
+          error: 'Failed to get batch audio features',
+          details: e.response?.data || e.message
+        });
+      }
+    }
+  } catch (err) {
+    // Top-level error catch
+    console.error('audio-features-batch route error:', err);
+    return res.status(500).json({ error: 'Internal server error', details: err.message });
   }
 });
 
@@ -751,17 +785,8 @@ router.get('/audio-features-batch', async (req, res) => {
     );
     res.json(featuresResp.data);
   } catch (e) {
-    console.error('Batch audio features error:', {
-      message: e.message,
-      response: e.response?.data,
-      status: e.response?.status,
-      headers: e.response?.headers,
-      config: e.config,
-    });
-    res.status(500).json({
-      error: 'Failed to get batch audio features',
-      details: e.response?.data || e.message
-    });
+    console.error('Batch audio features error:', e.response?.data || e.message);
+    res.status(500).json({ error: 'Failed to get batch audio features' });
   }
 });
 
