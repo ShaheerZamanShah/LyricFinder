@@ -11,17 +11,16 @@ function App() {
   return (
     <ThemeProvider>
       <Router>
-        <div className="App" style={{ position: 'relative', minHeight: '100vh', overflow: 'hidden' }}>
-          <DarkVeil style={{ position: 'fixed', inset: 0, zIndex: 0 }} />
-          <div style={{ position: 'relative', zIndex: 1 }}>
-            <Header />
-            <main>
-              <Routes>
-                <Route path="/" element={<Home />} />
-                <Route path="/stats" element={<Stats />} />
-              </Routes>
-            </main>
-          </div>
+        <div className="App" style={{ minHeight: '100vh', position: 'relative' }}>
+          {/* DarkVeil as background, not fixed */}
+          <DarkVeil />
+          <Header />
+          <main>
+            <Routes>
+              <Route path="/" element={<Home />} />
+              <Route path="/stats" element={<Stats />} />
+            </Routes>
+          </main>
         </div>
       </Router>
     </ThemeProvider>
