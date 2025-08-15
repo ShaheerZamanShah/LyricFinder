@@ -417,12 +417,44 @@ export default function Stats() {
               <div className="text-center py-8">
                 <p className="text-white/70 text-sm mb-4">Load your stats first, then get AI-powered insights about your music taste.</p>
                 <button 
-                  disabled={loading || topTracks.length === 0} 
+                  disabled={loading || topTracks.length === 0 || topArtists.length === 0} 
                   onClick={fetchAnalysis}
                   className={classNames(buttonBase, 'bg-gradient-to-r from-yellow-500/20 to-orange-500/20 border-yellow-400/30')}
                 >
                   {loading ? <Loader2 className="w-4 h-4 animate-spin"/> : <Sparkles className="w-4 h-4"/>}
                   {loading ? 'Analyzing...' : 'Analyze My Taste'}
+                </button>
+                <button
+                  disabled={loading || topTracks.length === 0 || topArtists.length === 0}
+                  onClick={async () => {
+                    try {
+                      setLoading(true);
+                      setError('');
+                      // Prepare data for backend
+                      const accessToken = window.localStorage.getItem('spotify_token');
+                      const response = await fetch('/api/critic', {
+                        method: 'POST',
+                        headers: {
+                          'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({ accessToken })
+                      });
+                      if (!response.ok) throw new Error('Failed to get AI critique');
+                      const data = await response.json();
+                      setAnalysis({
+                        ...data.analysis,
+                        aiCritique: data.critique
+                      });
+                    } catch (e) {
+                      setError(e.message || 'AI Critic failed. Try again.');
+                    } finally {
+                      setLoading(false);
+                    }
+                  }}
+                  className={classNames(buttonBase, 'ml-4 bg-gradient-to-r from-yellow-500/20 to-orange-500/20 border-yellow-400/30')}
+                >
+                  {loading ? <Loader2 className="w-4 h-4 animate-spin"/> : <Stars className="w-4 h-4"/>}
+                  {loading ? 'Roasting...' : 'AI Music Critic Roast'}
                 </button>
               </div>
             ) : (
@@ -430,47 +462,61 @@ export default function Stats() {
                 {/* Vibe Summary */}
                 <div className="rounded-lg border border-white/10 bg-gradient-to-r from-purple-500/10 to-blue-500/10 p-4">
                   <div className="text-white/80 text-sm mb-2">Your Vibe</div>
-                  <div className="text-white text-xl font-bold mb-2">{analysis.roastLevel} & {analysis.energyLevel}</div>
-                  <p className="text-white/90 leading-relaxed">{analysis.verdict}</p>
+                  <div className="text-white text-xl font-bold mb-2">{analysis.roastLevel ? `${analysis.roastLevel} & ${analysis.energyLevel}` : ''}</div>
+                  <p className="text-white/90 leading-relaxed">{analysis.verdict || ''}</p>
                 </div>
 
                 {/* Audio Features Grid */}
-                <div className="grid grid-cols-2 gap-3">
-                  {Object.entries(analysis.summary).map(([key, value]) => (
-                    <div key={key} className="rounded-lg border border-white/10 bg-white/5 p-3">
-                      <div className="text-white/70 text-xs uppercase tracking-wide mb-1">{key}</div>
-                      <div className="text-white font-semibold text-lg">
-                        {key === 'tempo' ? `${Math.round(value||0)} BPM` : `${Math.round(((value||0)*100))}%`}
+                {analysis.summary && (
+                  <div className="grid grid-cols-2 gap-3">
+                    {Object.entries(analysis.summary).map(([key, value]) => (
+                      <div key={key} className="rounded-lg border border-white/10 bg-white/5 p-3">
+                        <div className="text-white/70 text-xs uppercase tracking-wide mb-1">{key}</div>
+                        <div className="text-white font-semibold text-lg">
+                          {key === 'tempo' ? `${Math.round(value||0)} BPM` : `${Math.round(((value||0)*100))}%`}
+                        </div>
+                        <div className="w-full h-2 bg-white/10 rounded mt-2 overflow-hidden">
+                          <div 
+                            className="h-full bg-gradient-to-r from-purple-400 to-blue-400 transition-all duration-700" 
+                            style={{ 
+                              width: key === 'tempo' 
+                                ? `${Math.min(100, Math.round(((value||0)-60)/1.4))}%` 
+                                : `${Math.round(((value||0)*100))}%` 
+                            }} 
+                          />
+                        </div>
                       </div>
-                      <div className="w-full h-2 bg-white/10 rounded mt-2 overflow-hidden">
-                        <div 
-                          className="h-full bg-gradient-to-r from-purple-400 to-blue-400 transition-all duration-700" 
-                          style={{ 
-                            width: key === 'tempo' 
-                              ? `${Math.min(100, Math.round(((value||0)-60)/1.4))}%` 
-                              : `${Math.round(((value||0)*100))}%` 
-                          }} 
-                        />
-                      </div>
-                    </div>
-                  ))}
-                </div>
-
-                {/* Top Genres */}
-                <div className="rounded-lg border border-white/10 bg-white/5 p-4">
-                  <div className="text-white/80 text-sm mb-3">Top Genres</div>
-                  <div className="flex flex-wrap gap-2">
-                    {analysis.topGenres.map((genre, index) => (
-                      <span 
-                        key={genre.genre} 
-                        className="text-sm text-white/90 border border-white/15 bg-gradient-to-r from-purple-500/20 to-blue-500/20 rounded-full px-3 py-1.5 flex items-center gap-1"
-                      >
-                        <div className="w-2 h-2 rounded-full bg-gradient-to-r from-purple-400 to-blue-400"></div>
-                        {genre.genre}
-                      </span>
                     ))}
                   </div>
-                </div>
+                )}
+
+                {/* Top Genres */}
+                {analysis.topGenres && (
+                  <div className="rounded-lg border border-white/10 bg-white/5 p-4">
+                    <div className="text-white/80 text-sm mb-3">Top Genres</div>
+                    <div className="flex flex-wrap gap-2">
+                      {analysis.topGenres.map((genre, index) => (
+                        <span 
+                          key={genre} 
+                          className="text-sm text-white/90 border border-white/15 bg-gradient-to-r from-purple-500/20 to-blue-500/20 rounded-full px-3 py-1.5 flex items-center gap-1"
+                        >
+                          <div className="w-2 h-2 rounded-full bg-gradient-to-r from-purple-400 to-blue-400"></div>
+                          {genre}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* AI Critique/roast */}
+                {analysis.aiCritique && (
+                  <div className="rounded-lg border border-yellow-400 bg-yellow-900/10 p-4 mt-4">
+                    <div className="text-yellow-300 text-lg font-bold mb-2 flex items-center gap-2">
+                      <Stars className="w-5 h-5"/> AI Critic's Verdict
+                    </div>
+                    <pre className="text-yellow-100 whitespace-pre-wrap text-base leading-relaxed">{analysis.aiCritique}</pre>
+                  </div>
+                )}
               </div>
             )}
           </section>
