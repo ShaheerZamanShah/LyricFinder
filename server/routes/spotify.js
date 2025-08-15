@@ -165,7 +165,10 @@ router.get('/me/top-tracks', async (req, res) => {
     const limit = Math.min(parseInt(req.query.limit || '20', 10), 50);
     let accessToken = req.headers.authorization?.replace(/^Bearer\s+/i, '') || getCookie(req, 'spotify_access_token');
     const refreshToken = getCookie(req, 'spotify_refresh_token');
-    if (!accessToken && !refreshToken) return res.status(401).json({ error: 'Not authenticated' });
+    if (!accessToken && !refreshToken) {
+      console.error('No access or refresh token found for user');
+      return res.status(401).json({ error: 'Not authenticated' });
+    }
 
     async function fetchTop(token) {
       return axios.get(`https://api.spotify.com/v1/me/top/tracks?limit=${limit}`, { headers: { Authorization: `Bearer ${token}` } });
@@ -175,6 +178,11 @@ router.get('/me/top-tracks', async (req, res) => {
       const r = await fetchTop(accessToken);
       return res.json(r.data);
     } catch (e) {
+      console.error('Error fetching top tracks from Spotify:', {
+        status: e.response?.status,
+        data: e.response?.data,
+        message: e.message
+      });
       if (e.response?.status === 401 && refreshToken && clientId && clientSecret) {
         try {
           const refreshed = await refreshSpotifyAccessToken(refreshToken, clientId, clientSecret);
@@ -189,11 +197,11 @@ router.get('/me/top-tracks', async (req, res) => {
         }
       }
       const status = e.response?.status || 500;
-      return res.status(status).json({ error: 'Failed to fetch top tracks' });
+      return res.status(status).json({ error: 'Failed to fetch top tracks', details: e.response?.data || e.message });
     }
   } catch (e) {
-    console.error('Top tracks error:', e.response?.data || e.message);
-    res.status(500).json({ error: 'Failed to fetch top tracks' });
+    console.error('Top tracks error (outer catch):', e.response?.data || e.message);
+    res.status(500).json({ error: 'Failed to fetch top tracks', details: e.response?.data || e.message });
   }
 });
 
