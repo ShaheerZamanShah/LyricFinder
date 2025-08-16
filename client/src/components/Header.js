@@ -91,7 +91,6 @@ const Header = ({ isSearchCollapsed, onCollapseChange }) => {
         </Link>
       </nav>
     </header>
-    </header>
   );
 };
 
