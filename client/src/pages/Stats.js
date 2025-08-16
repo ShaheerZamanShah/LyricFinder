@@ -166,7 +166,7 @@ export default function Stats() {
       const featuresData = await featuresResp.json();
       const features = featuresData.audio_features || featuresData.features || [];
       
-      const artistIds = Array.from(new Set(topTracks.flatMap(t => t.artists?.map(a=>a.id).filter(Boolean) || [])).slice(0, 40);
+      const artistIds = Array.from(new Set(topTracks.flatMap(t => t.artists?.map(a=>a.id).filter(Boolean) || [])).slice(0, 40));
       const artistsResp = await fetch(`${API_ENDPOINTS.SPOTIFY_ARTISTS}?ids=${encodeURIComponent(artistIds.join(','))}`, {
         credentials: 'include',
         mode: 'cors'
