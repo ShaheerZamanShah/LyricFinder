@@ -10,5 +10,6 @@
     { "src": "/logo512.png", "dest": "/logo512.png" },
     { "src": "/static/(.*)", "dest": "/static/$1" },
     { "src": "/(.*)", "dest": "/index.html" }
-  ]
+  ],
+  "//": "Trigger redeploy: dummy change"
 }
