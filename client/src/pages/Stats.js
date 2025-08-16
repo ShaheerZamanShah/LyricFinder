@@ -13,7 +13,14 @@ import {
   Play,
   Mic,
   Heart,
-  Zap
+  Zap,
+  LogOut,
+  Disc,
+  Headphones,
+  Activity,
+  BarChart2,
+  Music,
+  Volume2
 } from 'lucide-react';
 
 function classNames(...xs) { return xs.filter(Boolean).join(' '); }
@@ -33,9 +40,10 @@ export default function Stats() {
   const [topTracks, setTopTracks] = useState([]);
   const [topArtists, setTopArtists] = useState([]);
   const [analysis, setAnalysis] = useState(null);
+  const [activeTab, setActiveTab] = useState('tracks'); // For responsive tabs
 
   const startAuth = useCallback(() => {
-  window.location.href = API_ENDPOINTS.SPOTIFY_AUTH;
+    window.location.href = API_ENDPOINTS.SPOTIFY_AUTH;
   }, []);
 
   const fetchProfile = useCallback(async () => {
@@ -44,25 +52,20 @@ export default function Stats() {
       const token = window.localStorage.getItem('spotify_token');
       const headers = token ? { Authorization: `Bearer ${token}` } : undefined;
       
-  console.log('Fetching profile from:', API_ENDPOINTS.SPOTIFY_ME);
       const r = await fetch(API_ENDPOINTS.SPOTIFY_ME, { 
         credentials: 'include', 
         headers,
         mode: 'cors'
       });
       
-      console.log('Profile response status:', r.status);
       if (!r.ok) {
         const errorText = await r.text();
-        console.error('Profile error response:', errorText);
         return setAuth({ status: r.status === 401 ? 'unauth' : 'error', profile: null });
       }
       
       const data = await r.json();
-      console.log('Profile data received:', data);
       setAuth({ status: 'ok', profile: data });
     } catch (e) {
-      console.error('Profile fetch error:', e);
       setAuth({ status: 'error', profile: null });
     }
   }, []);
@@ -74,27 +77,22 @@ export default function Stats() {
       setTopTracks([]); 
       setAnalysis(null);
       
-  console.log('Fetching top tracks from:', API_ENDPOINTS.SPOTIFY_ME_TOP_TRACKS);
       const r = await fetch(`${API_ENDPOINTS.SPOTIFY_ME_TOP_TRACKS}?time_range=${selectedTimeRange}`, {
         credentials: 'include',
         mode: 'cors'
       });
       
-      console.log('Top tracks response status:', r.status);
       if (r.status === 401) {
-        console.log('Unauthorized, redirecting to auth');
-  window.location.href = API_ENDPOINTS.SPOTIFY_AUTH;
+        window.location.href = API_ENDPOINTS.SPOTIFY_AUTH;
         return;
       }
       
       if (!r.ok) {
         const errorData = await r.json().catch(() => ({}));
-        console.error('Top tracks error response:', errorData);
         throw new Error(errorData.error || `HTTP ${r.status}: Failed to fetch top tracks`);
       }
       
       const data = await r.json();
-      console.log('Top tracks data received:', data);
       const items = (data.items || []).map(t => ({
         id: t.id,
         title: t.name,
@@ -107,7 +105,6 @@ export default function Stats() {
       }));
       setTopTracks(items);
     } catch (e) {
-      console.error('Top tracks fetch error:', e);
       setError(e.message || 'Could not load your top tracks. Please try again.');
     } finally {
       setLoading(false);
@@ -120,27 +117,22 @@ export default function Stats() {
       setError(''); 
       setTopArtists([]); 
       
-  console.log('Fetching top artists from:', API_ENDPOINTS.SPOTIFY_ME_TOP_ARTISTS);
       const r = await fetch(`${API_ENDPOINTS.SPOTIFY_ME_TOP_ARTISTS}?time_range=${selectedTimeRange}`, {
         credentials: 'include',
         mode: 'cors'
       });
       
-      console.log('Top artists response status:', r.status);
       if (r.status === 401) {
-        console.log('Unauthorized, redirecting to auth');
-  window.location.href = API_ENDPOINTS.SPOTIFY_AUTH;
+        window.location.href = API_ENDPOINTS.SPOTIFY_AUTH;
         return;
       }
       
       if (!r.ok) {
         const errorData = await r.json().catch(() => ({}));
-        console.error('Top artists error response:', errorData);
         throw new Error(errorData.error || `HTTP ${r.status}: Failed to fetch top artists`);
       }
       
       const data = await r.json();
-      console.log('Top artists data received:', data);
       const items = (data.items || []).map(a => ({
         id: a.id,
         name: a.name,
@@ -152,7 +144,6 @@ export default function Stats() {
       }));
       setTopArtists(items);
     } catch (e) {
-      console.error('Top artists fetch error:', e);
       setError(e.message || 'Could not load your top artists. Please try again.');
     } finally {
       setLoading(false);
@@ -166,7 +157,6 @@ export default function Stats() {
       const ids = topTracks.map(t => t.id).slice(0, 20);
       if (ids.length === 0) throw new Error('No tracks to analyze');
       
-      // Use recommended batch analysis logic
       const featuresResp = await fetch(`${API_ENDPOINTS.SPOTIFY_AUDIO_FEATURES_BATCH}?ids=${ids.join(',')}`, {
         credentials: 'include',
         mode: 'cors'
@@ -176,7 +166,7 @@ export default function Stats() {
       const featuresData = await featuresResp.json();
       const features = featuresData.audio_features || featuresData.features || [];
       
-      const artistIds = Array.from(new Set(topTracks.flatMap(t => t.artists?.map(a=>a.id).filter(Boolean) || []))).slice(0, 40);
+      const artistIds = Array.from(new Set(topTracks.flatMap(t => t.artists?.map(a=>a.id).filter(Boolean) || [])).slice(0, 40);
       const artistsResp = await fetch(`${API_ENDPOINTS.SPOTIFY_ARTISTS}?ids=${encodeURIComponent(artistIds.join(','))}`, {
         credentials: 'include',
         mode: 'cors'
@@ -203,14 +193,12 @@ export default function Stats() {
         tempo: avg(numeric('tempo')),
       };
 
-      // Enhanced AI verdict with more personality
       const roastLevel = (summary.valence ?? 0.5) < 0.35 ? 'Brooding' : (summary.valence ?? 0.5) > 0.7 ? 'Sunny' : 'Balanced';
       const energyLevel = (summary.energy ?? 0.5) > 0.7 ? 'High-Energy' : (summary.energy ?? 0.5) < 0.3 ? 'Chill' : 'Moderate';
       const verdict = `Your vibe is ${roastLevel.toLowerCase()} with ${energyLevel.toLowerCase()} energy. Danceability ${Math.round((summary.danceability||0)*100)}%, energy ${Math.round((summary.energy||0)*100)}%, and a tempo around ${Math.round(summary.tempo||0)} BPM. Top genres: ${topGenres.map(g=>g.genre).join(', ') || '—'}.`;
 
       setAnalysis({ summary, topGenres, verdict, roastLevel, energyLevel });
     } catch (e) {
-      console.error('Analysis error:', e);
       setError(e.message || 'Analysis failed. Try again.');
     } finally {
       setLoading(false);
@@ -219,8 +207,8 @@ export default function Stats() {
 
   useEffect(() => { fetchProfile(); }, [fetchProfile]);
 
-  const buttonBase = 'inline-flex items-center gap-2 rounded-lg border px-4 py-2 transition-all duration-300 transform hover:scale-105 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-transparent';
-  const cardBase = 'rounded-2xl border p-6 shadow-lg transition-all duration-300 hover:shadow-xl';
+  const buttonBase = 'inline-flex items-center gap-2 rounded-lg border border-white/15 bg-gradient-to-r from-purple-600/90 to-blue-500/90 hover:from-purple-600 hover:to-blue-500 text-white px-4 py-2 transition-all duration-200 hover:scale-105 hover:shadow-lg shadow-purple-500/20';
+  const cardBase = 'rounded-xl border border-white/10 bg-gradient-to-br from-gray-900/50 to-gray-800/50 backdrop-blur-sm p-5 transition-all duration-300 hover:shadow-xl hover:border-white/20';
 
   const disconnectSpotify = useCallback(() => {
     window.localStorage.removeItem('spotify_token');
@@ -237,25 +225,39 @@ export default function Stats() {
     await Promise.all([fetchTopTracks(), fetchTopArtists()]);
   }, [fetchTopTracks, fetchTopArtists]);
 
+  // Format duration from ms to mm:ss
+  const formatDuration = (ms) => {
+    const minutes = Math.floor(ms / 60000);
+    const seconds = ((ms % 60000) / 1000).toFixed(0);
+    return `${minutes}:${seconds < 10 ? '0' : ''}${seconds}`;
+  };
+
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-900 via-indigo-900 to-purple-900 text-white">
-      <div className="max-w-7xl mx-auto px-4 py-12">
+    <div className="min-h-screen bg-gradient-to-br from-gray-900 to-gray-800 p-4 md:p-6">
+      <div className="max-w-7xl mx-auto">
         {/* Header Section */}
-        <section className={classNames(cardBase, 'border-indigo-500/20 bg-gray-800/50 backdrop-blur-lg mb-8')}>
-          <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-6 mb-8">
+        <section className="rounded-2xl border border-white/15 bg-gradient-to-br from-purple-900/20 via-blue-900/20 to-indigo-900/20 backdrop-blur-lg p-6 md:p-8 shadow-2xl mb-8 animate-fadeIn">
+          <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 mb-6">
             <div>
-              <h1 className="text-4xl font-bold mb-2 flex items-center gap-3 animate-fade-in">
-                <TrendingUp className="w-8 h-8 text-indigo-400" /> 
-                Music Stats
+              <h1 className="text-3xl md:text-4xl font-bold text-white mb-2 flex items-center gap-3">
+                <div className="bg-gradient-to-r from-purple-500 to-blue-500 p-2 rounded-lg">
+                  <TrendingUp className="w-6 h-6 text-white" /> 
+                </div>
+                <span className="bg-clip-text text-transparent bg-gradient-to-r from-purple-300 to-blue-300">
+                  Music Stats Dashboard
+                </span>
               </h1>
-              <p className="text-gray-300 text-lg">Uncover your listening habits with personalized insights and AI analysis.</p>
+              <p className="text-white/80 text-lg max-w-2xl">
+                Discover your listening patterns and get AI-powered insights about your music taste
+              </p>
             </div>
+            
             {auth.status === 'ok' ? (
-              <button className={classNames(buttonBase, 'border-red-500/50 bg-red-900/20 hover:bg-red-900/30 text-red-200 focus:ring-red-500')} onClick={disconnectSpotify}>
-                <LogIn className="w-4 h-4 rotate-180" /> Disconnect Spotify
+              <button className={buttonBase} onClick={disconnectSpotify}>
+                <LogOut className="w-4 h-4" /> Disconnect Spotify
               </button>
             ) : (
-              <button className={classNames(buttonBase, 'border-green-500/50 bg-green-900/20 hover:bg-green-900/30 text-green-200 focus:ring-green-500')} onClick={startAuth}>
+              <button className={buttonBase} onClick={startAuth}>
                 <LogIn className="w-4 h-4" /> Connect Spotify
               </button>
             )}
@@ -263,8 +265,8 @@ export default function Stats() {
 
           {/* Time Range Selector */}
           {auth.status === 'ok' && (
-            <div className="flex flex-col md:flex-row items-start md:items-center gap-4 animate-slide-up">
-              <span className="text-gray-400 font-medium">Time Range:</span>
+            <div className="flex flex-wrap items-center gap-4">
+              <span className="text-white/70 font-medium">Time Range:</span>
               <div className="flex flex-wrap gap-2">
                 {TIME_RANGES.map((range) => {
                   const Icon = range.icon;
@@ -273,10 +275,10 @@ export default function Stats() {
                       key={range.value}
                       onClick={() => setSelectedTimeRange(range.value)}
                       className={classNames(
-                        'flex items-center gap-2 px-4 py-2 rounded-lg border transition-all duration-300',
+                        'flex items-center gap-2 px-4 py-2 rounded-lg border transition-all duration-200 shadow-md',
                         selectedTimeRange === range.value
-                          ? 'border-indigo-400 bg-indigo-500/20 text-white shadow-md'
-                          : 'border-gray-600/50 bg-gray-800/50 text-gray-300 hover:bg-gray-700/50 hover:text-white hover:shadow'
+                          ? 'border-purple-400 bg-gradient-to-r from-purple-600/30 to-blue-500/30 text-white shadow-purple-500/30'
+                          : 'border-white/20 bg-white/5 text-white/70 hover:bg-white/10 hover:text-white'
                       )}
                     >
                       <Icon className="w-4 h-4" />
@@ -288,98 +290,166 @@ export default function Stats() {
               <button 
                 disabled={loading} 
                 onClick={loadStats}
-                className={classNames(buttonBase, 'md:ml-auto border-indigo-500/50 bg-indigo-900/20 hover:bg-indigo-900/30 text-indigo-200 focus:ring-indigo-500')}
+                className={classNames(
+                  buttonBase, 
+                  'bg-gradient-to-r from-purple-500 to-blue-500 shadow-lg',
+                  loading ? 'opacity-75 cursor-not-allowed' : ''
+                )}
               >
-                {loading ? <Loader2 className="w-4 h-4 animate-spin"/> : <Zap className="w-4 h-4"/>}
+                {loading ? (
+                  <Loader2 className="w-4 h-4 animate-spin"/>
+                ) : (
+                  <Zap className="w-4 h-4 fill-yellow-400 text-yellow-400"/>
+                )}
                 {loading ? 'Loading...' : 'Load Stats'}
               </button>
             </div>
           )}
         </section>
 
+        {/* Stats Tabs for Mobile */}
+        <div className="flex md:hidden mb-6 border-b border-white/10">
+          <button 
+            className={`flex-1 py-3 text-center font-medium transition-colors ${activeTab === 'tracks' ? 'text-white border-b-2 border-purple-400' : 'text-white/60'}`}
+            onClick={() => setActiveTab('tracks')}
+          >
+            Tracks
+          </button>
+          <button 
+            className={`flex-1 py-3 text-center font-medium transition-colors ${activeTab === 'artists' ? 'text-white border-b-2 border-blue-400' : 'text-white/60'}`}
+            onClick={() => setActiveTab('artists')}
+          >
+            Artists
+          </button>
+          <button 
+            className={`flex-1 py-3 text-center font-medium transition-colors ${activeTab === 'analysis' ? 'text-white border-b-2 border-yellow-400' : 'text-white/60'}`}
+            onClick={() => setActiveTab('analysis')}
+          >
+            Analysis
+          </button>
+        </div>
+
         {/* Main Content Grid */}
-        <div className="grid gap-8 lg:grid-cols-2">
-          {/* Left Side - Stats */}
-          <div className="space-y-8">
-            {/* Top Tracks */}
-            <section className={classNames(cardBase, 'border-green-500/20 bg-gray-800/50 backdrop-blur-lg animate-fade-in-left')}>
-              <h2 className="text-2xl font-semibold mb-4 flex items-center gap-2">
-                <Music2 className="w-6 h-6 text-green-400" /> Top Tracks
+        <div className="grid gap-8 lg:grid-cols-3">
+          {/* Left Side - Top Tracks */}
+          <div className={`lg:col-span-1 ${activeTab === 'tracks' ? 'block' : 'hidden md:block'}`}>
+            <section className={classNames(cardBase, 'h-full animate-slideIn')}>
+              <h2 className="text-xl font-semibold text-white mb-4 flex items-center gap-2">
+                <div className="bg-gradient-to-r from-green-500 to-emerald-500 p-1.5 rounded-lg">
+                  <Music2 className="w-5 h-5 text-white"/> 
+                </div>
+                Top Tracks
               </h2>
               {auth.status === 'ok' ? (
                 <div>
-                  {error && <div className="text-red-300 text-sm mb-4 p-3 bg-red-900/20 rounded-lg border border-red-500/50">{error}</div>}
-                  <ul className="space-y-4 max-h-[500px] overflow-auto pr-2 scrollbar-thin scrollbar-thumb-indigo-500 scrollbar-track-gray-800">
+                  {error && <div className="text-red-300 text-sm mb-3 p-3 bg-red-500/10 rounded-lg border border-red-500/30">{error}</div>}
+                  <ul className="space-y-3 max-h-[500px] overflow-auto pr-2 scrollbar-thin scrollbar-thumb-gray-700 scrollbar-track-gray-800">
                     {topTracks.map((track, index) => (
-                      <li key={track.id} className="flex items-center gap-4 rounded-xl border border-gray-600/50 bg-gray-900/50 p-4 hover:bg-gray-900/70 transition-all duration-300 hover:shadow-md transform hover:-translate-y-1">
-                        <div className="flex items-center gap-4 flex-1">
-                          <div className="w-10 h-10 rounded-full bg-gradient-to-br from-green-500 to-indigo-500 flex items-center justify-center text-white font-bold">
+                      <li 
+                        key={track.id} 
+                        className="flex items-center gap-3 rounded-lg border border-white/10 bg-gradient-to-r from-gray-800/50 to-gray-800/30 p-3 hover:bg-white/10 transition-all duration-200 hover:scale-[1.01] group"
+                      >
+                        <div className="flex items-center gap-3 flex-1">
+                          <div className="w-8 h-8 rounded-full bg-gradient-to-br from-green-500 to-emerald-500 flex items-center justify-center text-white font-bold text-sm">
                             {index + 1}
                           </div>
                           {track.image ? 
-                            <img src={track.image} alt="cover" className="w-16 h-16 rounded-lg object-cover shadow-md"/> : 
-                            <div className="w-16 h-16 rounded-lg bg-gradient-to-br from-green-600/30 to-indigo-600/30 flex items-center justify-center">
-                              <Play className="w-6 h-6 text-gray-400" />
+                            <img 
+                              src={track.image} 
+                              alt="cover" 
+                              className="w-12 h-12 rounded object-cover shadow-md group-hover:scale-105 transition-transform duration-300"
+                            /> : 
+                            <div className="w-12 h-12 rounded bg-gradient-to-br from-green-500/20 to-emerald-500/20 flex items-center justify-center">
+                              <Play className="w-5 h-5 text-white/50" />
                             </div>
                           }
                           <div className="min-w-0 flex-1">
-                            <div className="text-white font-medium truncate text-lg">{track.title}</div>
-                            <div className="text-gray-400 text-sm truncate">{track.artist}</div>
+                            <div className="text-white font-medium truncate">{track.title}</div>
+                            <div className="text-white/70 text-sm truncate">{track.artist}</div>
+                            <div className="text-xs text-gray-400 mt-1">
+                              {formatDuration(track.duration_ms)}
+                            </div>
                           </div>
                         </div>
-                        <div className="flex items-center gap-3">
-                          <div className="text-gray-400 font-medium">{track.popularity ?? '—'}</div>
-                          <Heart className="w-5 h-5 text-red-400" />
+                        <div className="flex items-center gap-2">
+                          <div className="text-white/70 text-sm">{track.popularity ?? '—'}</div>
+                          <div className="bg-red-500/20 p-1.5 rounded-full">
+                            <Heart className="w-4 h-4 text-red-400" fill="currentColor" fillOpacity={0.3} />
+                          </div>
                         </div>
                       </li>
                     ))}
                   </ul>
                 </div>
               ) : (
-                <div className="text-gray-400 text-center py-12">Connect Spotify to view your top tracks.</div>
+                <div className="text-white/70 text-center py-8 flex flex-col items-center">
+                  <Disc className="w-10 h-10 text-white/30 mb-3" />
+                  Connect Spotify to see your top tracks
+                </div>
               )}
             </section>
+          </div>
 
-            {/* Top Artists */}
-            <section className={classNames(cardBase, 'border-blue-500/20 bg-gray-800/50 backdrop-blur-lg animate-fade-in-left delay-200')}>
-              <h2 className="text-2xl font-semibold mb-4 flex items-center gap-2">
-                <Users className="w-6 h-6 text-blue-400" /> Top Artists
+          {/* Middle - Top Artists */}
+          <div className={`lg:col-span-1 ${activeTab === 'artists' ? 'block' : 'hidden md:block'}`}>
+            <section className={classNames(cardBase, 'h-full animate-slideIn delay-100')}>
+              <h2 className="text-xl font-semibold text-white mb-4 flex items-center gap-2">
+                <div className="bg-gradient-to-r from-blue-500 to-cyan-500 p-1.5 rounded-lg">
+                  <Users className="w-5 h-5 text-white"/> 
+                </div>
+                Top Artists
               </h2>
               {auth.status === 'ok' ? (
                 <div>
-                  <ul className="space-y-4 max-h-[500px] overflow-auto pr-2 scrollbar-thin scrollbar-thumb-blue-500 scrollbar-track-gray-800">
+                  <ul className="space-y-3 max-h-[500px] overflow-auto pr-2 scrollbar-thin scrollbar-thumb-gray-700 scrollbar-track-gray-800">
                     {topArtists.map((artist, index) => (
-                      <li key={artist.id} className="flex items-center gap-4 rounded-xl border border-gray-600/50 bg-gray-900/50 p-4 hover:bg-gray-900/70 transition-all duration-300 hover:shadow-md transform hover:-translate-y-1">
-                        <div className="flex items-center gap-4 flex-1">
-                          <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-500 to-purple-500 flex items-center justify-center text-white font-bold">
+                      <li 
+                        key={artist.id} 
+                        className="flex items-center gap-3 rounded-lg border border-white/10 bg-gradient-to-r from-gray-800/50 to-gray-800/30 p-3 hover:bg-white/10 transition-all duration-200 hover:scale-[1.01] group"
+                      >
+                        <div className="flex items-center gap-3 flex-1">
+                          <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-500 to-cyan-500 flex items-center justify-center text-white font-bold text-sm">
                             {index + 1}
                           </div>
                           {artist.image ? 
-                            <img src={artist.image} alt="artist" className="w-16 h-16 rounded-full object-cover shadow-md"/> : 
-                            <div className="w-16 h-16 rounded-full bg-gradient-to-br from-blue-600/30 to-purple-600/30 flex items-center justify-center">
-                              <Mic className="w-6 h-6 text-gray-400" />
+                            <img 
+                              src={artist.image} 
+                              alt="artist" 
+                              className="w-12 h-12 rounded-full object-cover shadow-md group-hover:scale-105 transition-transform duration-300"
+                            /> : 
+                            <div className="w-12 h-12 rounded-full bg-gradient-to-br from-blue-500/20 to-cyan-500/20 flex items-center justify-center">
+                              <Mic className="w-5 h-5 text-white/50" />
                             </div>
                           }
                           <div className="min-w-0 flex-1">
-                            <div className="text-white font-medium truncate text-lg">{artist.name}</div>
-                            <div className="text-gray-400 text-sm truncate">
+                            <div className="text-white font-medium truncate">{artist.name}</div>
+                            <div className="text-white/70 text-sm truncate">
                               {artist.genres.slice(0, 2).join(', ')}
+                            </div>
+                            <div className="text-xs text-gray-400 mt-1">
+                              {artist.followers.toLocaleString()} followers
                             </div>
                           </div>
                         </div>
-                        <div className="flex items-center gap-3">
-                          <div className="text-gray-400 font-medium">{artist.popularity ?? '—'}</div>
-                          <Heart className="w-5 h-5 text-red-400" />
+                        <div className="flex items-center gap-2">
+                          <div className="text-white/70 text-sm">{artist.popularity ?? '—'}</div>
+                          <div className="bg-red-500/20 p-1.5 rounded-full">
+                            <Heart className="w-4 h-4 text-red-400" fill="currentColor" fillOpacity={0.3} />
+                          </div>
                         </div>
                       </li>
                     ))}
                   </ul>
+                  
                   {/* Top Genres Section */}
-                  <div className="mt-8">
-                    <h3 className="text-xl font-semibold mb-4 flex items-center gap-2">
-                      <Sparkles className="w-6 h-6 text-purple-400" /> Top Genres
+                  <div className="mt-6">
+                    <h3 className="text-lg font-semibold text-white mb-3 flex items-center gap-2">
+                      <div className="bg-gradient-to-r from-purple-500 to-pink-500 p-1 rounded-lg">
+                        <Sparkles className="w-4 h-4 text-white"/> 
+                      </div>
+                      Top Genres
                     </h3>
-                    <div className="flex flex-wrap gap-3">
+                    <div className="flex flex-wrap gap-2">
                       {(() => {
                         const genreCounts = {};
                         topArtists.forEach(a => {
@@ -391,10 +461,13 @@ export default function Stats() {
                           .sort((a, b) => b[1] - a[1])
                           .slice(0, 8)
                           .map(([genre, count]) => (
-                            <span key={genre} className="text-sm font-medium text-purple-200 border border-purple-500/50 bg-purple-900/20 rounded-full px-4 py-2 flex items-center gap-2 shadow-sm transition-all duration-300 hover:bg-purple-900/30">
-                              <div className="w-3 h-3 rounded-full bg-gradient-to-r from-purple-400 to-indigo-400"></div>
+                            <span 
+                              key={genre} 
+                              className="text-sm text-white/90 border border-white/15 bg-gradient-to-r from-purple-600/20 to-pink-500/20 rounded-full px-3 py-1.5 flex items-center gap-1 hover:scale-105 transition-transform duration-200"
+                            >
+                              <div className="w-2 h-2 rounded-full bg-gradient-to-r from-purple-400 to-pink-400"></div>
                               {genre}
-                              <span className="text-purple-300">({count})</span>
+                              <span className="ml-1 text-white/60">({count})</span>
                             </span>
                           ));
                       })()}
@@ -402,84 +475,84 @@ export default function Stats() {
                   </div>
                 </div>
               ) : (
-                <div className="text-gray-400 text-center py-12">Connect Spotify to view your top artists.</div>
+                <div className="text-white/70 text-center py-8 flex flex-col items-center">
+                  <Headphones className="w-10 h-10 text-white/30 mb-3" />
+                  Connect Spotify to see your top artists
+                </div>
               )}
             </section>
           </div>
 
-          {/* Right Side - Judge/Analysis */}
-          <div className="space-y-8">
-            <section className={classNames(cardBase, 'border-yellow-500/20 bg-gray-800/50 backdrop-blur-lg animate-fade-in-right')}>
-              <h2 className="text-2xl font-semibold mb-4 flex items-center gap-2">
-                <Stars className="w-6 h-6 text-yellow-400" /> AI Music Judge
+          {/* Right Side - Analysis */}
+          <div className={`lg:col-span-1 ${activeTab === 'analysis' ? 'block' : 'hidden md:block'}`}>
+            <section className={classNames(cardBase, 'h-full animate-slideIn delay-200')}>
+              <h2 className="text-xl font-semibold text-white mb-4 flex items-center gap-2">
+                <div className="bg-gradient-to-r from-yellow-500 to-amber-500 p-1.5 rounded-lg">
+                  <Activity className="w-5 h-5 text-white"/> 
+                </div>
+                AI Music Analysis
               </h2>
+              
               {!analysis ? (
-                <div className="text-center py-12 space-y-6">
-                  <p className="text-gray-400 text-base">Load your stats to unlock AI-powered insights into your music taste.</p>
+                <div className="text-center py-8">
+                  <div className="flex justify-center mb-4">
+                    <div className="w-16 h-16 rounded-full bg-gradient-to-r from-yellow-500/20 to-amber-500/20 flex items-center justify-center animate-pulse">
+                      <BarChart2 className="w-8 h-8 text-yellow-400" />
+                    </div>
+                  </div>
+                  <p className="text-white/70 text-sm mb-6 max-w-md mx-auto">
+                    Load your stats first, then get AI-powered insights about your music taste
+                  </p>
                   <div className="flex flex-col sm:flex-row gap-4 justify-center">
                     <button 
                       disabled={loading || topTracks.length === 0 || topArtists.length === 0} 
                       onClick={fetchAnalysis}
-                      className={classNames(buttonBase, 'border-yellow-500/50 bg-yellow-900/20 hover:bg-yellow-900/30 text-yellow-200 focus:ring-yellow-500')}
+                      className={classNames(
+                        buttonBase, 
+                        'bg-gradient-to-r from-yellow-600/90 to-amber-500/90 hover:from-yellow-600 hover:to-amber-500',
+                        (loading || topTracks.length === 0 || topArtists.length === 0) ? 'opacity-50 cursor-not-allowed' : ''
+                      )}
                     >
                       {loading ? <Loader2 className="w-4 h-4 animate-spin"/> : <Sparkles className="w-4 h-4"/>}
                       {loading ? 'Analyzing...' : 'Analyze My Taste'}
                     </button>
-                    <button
-                      disabled={loading || topTracks.length === 0 || topArtists.length === 0}
-                      onClick={async () => {
-                        try {
-                          setLoading(true);
-                          setError('');
-                          // Prepare data for backend
-                          const accessToken = window.localStorage.getItem('spotify_token');
-                          const response = await fetch('/api/critic', {
-                            method: 'POST',
-                            headers: {
-                              'Content-Type': 'application/json',
-                            },
-                            body: JSON.stringify({ accessToken })
-                          });
-                          if (!response.ok) throw new Error('Failed to get AI critique');
-                          const data = await response.json();
-                          setAnalysis({
-                            ...data.analysis,
-                            aiCritique: data.critique
-                          });
-                        } catch (e) {
-                          setError(e.message || 'AI Critic failed. Try again.');
-                        } finally {
-                          setLoading(false);
-                        }
-                      }}
-                      className={classNames(buttonBase, 'border-orange-500/50 bg-orange-900/20 hover:bg-orange-900/30 text-orange-200 focus:ring-orange-500')}
-                    >
-                      {loading ? <Loader2 className="w-4 h-4 animate-spin"/> : <Stars className="w-4 h-4"/>}
-                      {loading ? 'Roasting...' : 'AI Music Critic Roast'}
-                    </button>
                   </div>
                 </div>
               ) : (
-                <div className="space-y-6">
+                <div className="space-y-5">
                   {/* Vibe Summary */}
-                  <div className="rounded-xl border border-indigo-500/50 bg-indigo-900/20 p-6 shadow-md transition-all duration-300 hover:shadow-lg">
-                    <div className="text-gray-300 text-sm mb-2 font-medium uppercase tracking-wide">Your Vibe</div>
-                    <div className="text-white text-2xl font-bold mb-3">{analysis.roastLevel ? `${analysis.roastLevel} & ${analysis.energyLevel}` : ''}</div>
-                    <p className="text-gray-200 leading-relaxed">{analysis.verdict || ''}</p>
+                  <div className="rounded-lg border border-white/10 bg-gradient-to-r from-purple-900/20 to-blue-900/20 p-5">
+                    <div className="flex items-center gap-3 mb-3">
+                      <div className="bg-gradient-to-r from-purple-500 to-blue-500 p-1 rounded">
+                        <Music className="w-4 h-4 text-white" />
+                      </div>
+                      <div className="text-white/80 text-sm">Your Music Vibe</div>
+                    </div>
+                    <div className="text-white text-xl font-bold mb-2">
+                      <span className="bg-clip-text text-transparent bg-gradient-to-r from-purple-300 to-blue-300">
+                        {analysis.roastLevel} & {analysis.energyLevel}
+                      </span>
+                    </div>
+                    <p className="text-white/90 leading-relaxed">{analysis.verdict || ''}</p>
                   </div>
 
                   {/* Audio Features Grid */}
                   {analysis.summary && (
-                    <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                    <div className="grid grid-cols-2 gap-3">
                       {Object.entries(analysis.summary).map(([key, value]) => (
-                        <div key={key} className="rounded-xl border border-gray-600/50 bg-gray-900/50 p-4 shadow-sm transition-all duration-300 hover:shadow-md">
-                          <div className="text-gray-400 text-xs uppercase tracking-wide mb-2">{key}</div>
-                          <div className="text-white font-semibold text-xl mb-2">
+                        <div 
+                          key={key} 
+                          className="rounded-lg border border-white/10 bg-gradient-to-br from-gray-800/50 to-gray-800/30 p-3 hover:bg-white/5 transition-all duration-300"
+                        >
+                          <div className="text-white/70 text-xs uppercase tracking-wide mb-1 flex items-center gap-1">
+                            <Volume2 className="w-3 h-3" /> {key}
+                          </div>
+                          <div className="text-white font-semibold text-lg">
                             {key === 'tempo' ? `${Math.round(value||0)} BPM` : `${Math.round(((value||0)*100))}%`}
                           </div>
-                          <div className="w-full h-3 bg-gray-800 rounded-full overflow-hidden">
+                          <div className="w-full h-2 bg-white/10 rounded mt-2 overflow-hidden">
                             <div 
-                              className="h-full bg-gradient-to-r from-indigo-500 to-purple-500 transition-all duration-1000 ease-out" 
+                              className="h-full bg-gradient-to-r from-purple-500 to-blue-500 transition-all duration-700 ease-out" 
                               style={{ 
                                 width: key === 'tempo' 
                                   ? `${Math.min(100, Math.round(((value||0)-60)/1.4))}%` 
@@ -493,38 +566,81 @@ export default function Stats() {
                   )}
 
                   {/* Top Genres */}
-                  {analysis.topGenres && (
-                    <div className="rounded-xl border border-purple-500/50 bg-purple-900/20 p-6 shadow-md transition-all duration-300 hover:shadow-lg">
-                      <div className="text-gray-300 text-sm mb-4 font-medium uppercase tracking-wide">Top Genres</div>
-                      <div className="flex flex-wrap gap-3">
-                        {analysis.topGenres.map((g) => (
+                  {analysis.topGenres && analysis.topGenres.length > 0 && (
+                    <div className="rounded-lg border border-white/10 bg-gradient-to-br from-gray-800/50 to-gray-800/30 p-4">
+                      <div className="text-white/80 text-sm mb-3 flex items-center gap-2">
+                        <Sparkles className="w-4 h-4 text-purple-400" /> Top Genres
+                      </div>
+                      <div className="flex flex-wrap gap-2">
+                        {analysis.topGenres.map((genre, index) => (
                           <span 
-                            key={g.genre} 
-                            className="text-sm font-medium text-purple-200 border border-purple-500/50 bg-purple-900/30 rounded-full px-4 py-2 flex items-center gap-2 shadow-sm transition-all duration-300 hover:bg-purple-900/50"
+                            key={genre.genre} 
+                            className="text-sm text-white/90 border border-white/15 bg-gradient-to-r from-purple-600/20 to-blue-500/20 rounded-full px-3 py-1.5 flex items-center gap-1 hover:scale-105 transition-transform duration-200"
                           >
-                            <div className="w-3 h-3 rounded-full bg-gradient-to-r from-purple-400 to-indigo-400"></div>
-                            {g.genre} <span className="text-purple-300">({g.count})</span>
+                            <div className="w-2 h-2 rounded-full bg-gradient-to-r from-purple-400 to-blue-400"></div>
+                            {genre.genre}
                           </span>
                         ))}
                       </div>
                     </div>
                   )}
 
-                  {/* AI Critique/roast */}
-                  {analysis.aiCritique && (
-                    <div className="rounded-xl border border-yellow-500/50 bg-yellow-900/20 p-6 mt-6 shadow-md transition-all duration-300 hover:shadow-lg">
-                      <div className="text-yellow-300 text-xl font-bold mb-3 flex items-center gap-2">
-                        <Stars className="w-6 h-6"/> AI Critic's Verdict
-                      </div>
-                      <pre className="text-yellow-100 whitespace-pre-wrap text-base leading-relaxed font-sans">{analysis.aiCritique}</pre>
-                    </div>
-                  )}
+                  {/* Analysis Actions */}
+                  <div className="flex flex-wrap gap-3 mt-4">
+                    <button 
+                      onClick={fetchAnalysis}
+                      className={classNames(buttonBase, 'bg-gradient-to-r from-purple-600/90 to-blue-500/90')}
+                    >
+                      <Sparkles className="w-4 h-4" /> Re-analyze
+                    </button>
+                    <button
+                      onClick={disconnectSpotify}
+                      className={classNames(buttonBase, 'bg-gradient-to-r from-gray-700 to-gray-600')}
+                    >
+                      <LogOut className="w-4 h-4" /> Disconnect
+                    </button>
+                  </div>
                 </div>
               )}
             </section>
           </div>
         </div>
       </div>
+      
+      {/* Custom Animations */}
+      <style jsx global>{`
+        @keyframes fadeIn {
+          from { opacity: 0; transform: translateY(10px); }
+          to { opacity: 1; transform: translateY(0); }
+        }
+        @keyframes slideIn {
+          from { opacity: 0; transform: translateX(20px); }
+          to { opacity: 1; transform: translateX(0); }
+        }
+        .animate-fadeIn {
+          animation: fadeIn 0.6s ease-out forwards;
+        }
+        .animate-slideIn {
+          animation: slideIn 0.5s ease-out forwards;
+        }
+        .animate-slideIn.delay-100 {
+          animation-delay: 0.1s;
+        }
+        .animate-slideIn.delay-200 {
+          animation-delay: 0.2s;
+        }
+        .scrollbar-thin::-webkit-scrollbar {
+          width: 6px;
+        }
+        .scrollbar-thin::-webkit-scrollbar-thumb {
+          background-color: rgba(156, 163, 175, 0.5);
+          border-radius: 3px;
+        }
+        .scrollbar-thin::-webkit-scrollbar-track {
+          background: rgba(31, 41, 55, 0.2);
+          border-radius: 3px;
+        }
+      `}</style>
     </div>
   );
 }
