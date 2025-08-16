@@ -49,8 +49,14 @@ let mongoUri = process.env.MONGODB_URI || 'mongodb://localhost:27017/lyricfinder
   const cache = new NodeCache({ stdTTL: 300 }); // 5 min cache
 
   const limiter = rateLimit({
-    windowMs: 15 * 60 * 1000,
-    max: 100,
+    windowMs: 15 * 60 * 1000, // 15 minutes
+    max: 500, // Increase to 500 requests per window
+    standardHeaders: true,
+    legacyHeaders: false,
+    message: {
+      error: 'Too many requests, please try again later.',
+      status: 429
+    }
   });
   app.use('/api/', limiter);
 async function initDatabase() {

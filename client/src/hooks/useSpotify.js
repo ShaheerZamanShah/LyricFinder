@@ -33,21 +33,41 @@ const useSpotify = () => {
 
   const getClientCredentialsToken = async () => {
     try {
-  const response = await fetch(`${API_BASE_URL}/api/spotify/token`, {
+      const response = await fetch(`${API_BASE_URL}/api/spotify/token`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
         }
       });
 
-      const data = await response.json();
+      if (response.status === 429) {
+        // Rate limited
+        console.error('Spotify API rate limit reached. Please try again later.');
+        alert('Spotify API rate limit reached. Please try again later.');
+        return;
+      }
+
+      let data;
+      try {
+        data = await response.json();
+      } catch (jsonErr) {
+        // If response is not valid JSON, show error
+        console.error('Spotify token response is not valid JSON:', jsonErr);
+        alert('Spotify token response is not valid JSON. Please try again later.');
+        return;
+      }
+
       if (data.access_token) {
         setAccessToken(data.access_token);
         spotifyApi.setAccessToken(data.access_token);
         setIsAuthenticated(true);
+      } else if (data.error) {
+        console.error('Error getting Spotify token:', data.error);
+        alert('Error getting Spotify token: ' + (data.error || 'Unknown error'));
       }
     } catch (error) {
       console.error('Error getting Spotify token:', error);
+      alert('Error getting Spotify token. Please try again later.');
     }
   };
 
