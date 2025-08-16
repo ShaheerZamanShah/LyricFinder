@@ -1,7 +1,7 @@
 {
   "short_name": "LyricFinder",
-  "name": "LyricFinder - AI-Powered Song Lyrics & Music Analysis",
-  "description": "Find song lyrics, analyze music taste, and discover new music with AI-powered insights",
+  "name": "LyricFinder - Music Stats & Lyrics",
+  "description": "Discover your music taste with Spotify stats and AI-powered insights",
   "icons": [
     {
       "src": "favicon.ico",
@@ -21,9 +21,6 @@
   ],
   "start_url": ".",
   "display": "standalone",
-  "theme_color": "#1db954",
-  "background_color": "#121212",
-  "orientation": "portrait",
-  "categories": ["music", "entertainment", "utilities"],
-  "lang": "en"
+  "theme_color": "#8B5CF6",
+  "background_color": "#0F0F23"
 }
