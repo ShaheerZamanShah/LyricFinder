@@ -53,12 +53,12 @@ const Header = ({ isSearchCollapsed, onCollapseChange }) => {
               Home
             </Link>
             <Link
-                to="/stats"
-                className="text-white/80 hover:text-white transition-colors duration-200"
-                aria-label="Go to Stats page"
-                title="Stats"
-              >
-                Stats
+              to="/stats"
+              className="text-white/80 hover:text-white transition-colors duration-200"
+              aria-label="Go to Stats page"
+              title="Stats"
+            >
+              Stats
             </Link>
           </nav>
           <button
@@ -71,6 +71,26 @@ const Header = ({ isSearchCollapsed, onCollapseChange }) => {
           </button>
         </div>
       </div>
+      {/* Mobile nav row */}
+      <nav className="flex md:hidden justify-center items-center gap-8 mt-3">
+        <Link
+          to="/"
+          className="text-white/80 hover:text-white text-lg font-semibold transition-colors duration-200 px-3 py-2 rounded-md"
+          aria-label="Go to Home page"
+          title="Home"
+        >
+          Home
+        </Link>
+        <Link
+          to="/stats"
+          className="text-white/80 hover:text-white text-lg font-semibold transition-colors duration-200 px-3 py-2 rounded-md"
+          aria-label="Go to Stats page"
+          title="Stats"
+        >
+          Stats
+        </Link>
+      </nav>
+    </header>
     </header>
   );
 };
