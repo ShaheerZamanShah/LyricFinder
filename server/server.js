@@ -44,21 +44,20 @@ app.use(express.urlencoded({ extended: true, limit: '1mb' }));
 // MongoDB connection – supports real DB via MONGODB_URI or in-memory for local testing via USE_MEMORY_DB=1
 let mongoUri = process.env.MONGODB_URI || 'mongodb://localhost:27017/lyricfinder';
 
-  const rateLimit = require('express-rate-limit');
-  const NodeCache = require('node-cache');
-  const cache = new NodeCache({ stdTTL: 300 }); // 5 min cache
+const NodeCache = require('node-cache');
+const cache = new NodeCache({ stdTTL: 300 }); // 5 min cache
 
-  const limiter = rateLimit({
-    windowMs: 15 * 60 * 1000, // 15 minutes
-    max: 500, // Increase to 500 requests per window
-    standardHeaders: true,
-    legacyHeaders: false,
-    message: {
-      error: 'Too many requests, please try again later.',
-      status: 429
-    }
-  });
-  app.use('/api/', limiter);
+const limiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 500, // Increase to 500 requests per window
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: {
+    error: 'Too many requests, please try again later.',
+    status: 429
+  }
+});
+app.use('/api/', limiter);
 async function initDatabase() {
   try {
     if (process.env.USE_MEMORY_DB === '1') {
