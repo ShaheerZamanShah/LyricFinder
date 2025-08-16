@@ -3,6 +3,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Search, Loader2, X } from 'lucide-react';
 import { useTheme } from '../contexts/ThemeContext';
 import { API_ENDPOINTS } from '../config/api';
+import debounce from 'lodash.debounce';
 
 const SearchForm = ({ onSearchResults, onCollapseChange = () => {}, isHeaderSearch = false }) => {
   const [query, setQuery] = useState('');

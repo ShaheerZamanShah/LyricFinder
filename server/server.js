@@ -39,16 +39,20 @@ app.use(cors(corsOptions));
 app.use(express.json({ limit: '1mb' }));
 app.use(express.urlencoded({ extended: true, limit: '1mb' }));
 
-// Rate limiting
-const limiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 100 // limit each IP to 100 requests per window
-});
-app.use(limiter);
+// Rate limiting already applied above
 
 // MongoDB connection – supports real DB via MONGODB_URI or in-memory for local testing via USE_MEMORY_DB=1
 let mongoUri = process.env.MONGODB_URI || 'mongodb://localhost:27017/lyricfinder';
 
+  const rateLimit = require('express-rate-limit');
+  const NodeCache = require('node-cache');
+  const cache = new NodeCache({ stdTTL: 300 }); // 5 min cache
+
+  const limiter = rateLimit({
+    windowMs: 15 * 60 * 1000,
+    max: 100,
+  });
+  app.use('/api/', limiter);
 async function initDatabase() {
   try {
     if (process.env.USE_MEMORY_DB === '1') {

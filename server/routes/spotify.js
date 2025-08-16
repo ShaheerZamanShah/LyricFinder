@@ -318,13 +318,22 @@ router.post('/token', async (req, res) => {
   }
 });
 
-// Search Spotify tracks (simplified endpoint with built-in auth)
+// Search Spotify tracks (simplified endpoint with built-in auth and caching)
+const NodeCache = require('node-cache');
+const spotifySearchCache = new NodeCache({ stdTTL: 60 * 5, checkperiod: 120 }); // 5 min TTL
+
 router.get('/search', async (req, res) => {
   try {
     const { q, limit = 10 } = req.query;
-    
     if (!q) {
       return res.status(400).json({ error: 'Search query required' });
+    }
+
+    // Check cache first
+    const cacheKey = `search:${q}:${limit}`;
+    const cached = spotifySearchCache.get(cacheKey);
+    if (cached) {
+      return res.json({ tracks: cached });
     }
 
     // Use Spotify credentials from environment only (no hardcoded fallbacks)
@@ -333,10 +342,9 @@ router.get('/search', async (req, res) => {
     if (!clientId || !clientSecret) {
       return res.status(500).json({ error: 'Spotify credentials not configured' });
     }
-    
+
     // Get access token
     const credentials = Buffer.from(`${clientId}:${clientSecret}`).toString('base64');
-    
     const tokenResponse = await axios.post(
       'https://accounts.spotify.com/api/token',
       'grant_type=client_credentials',
@@ -377,6 +385,9 @@ router.get('/search', async (req, res) => {
       popularity: track.popularity,
       spotify_id: track.id
     }));
+
+    // Store in cache
+    spotifySearchCache.set(cacheKey, tracks);
 
     res.json({ tracks });
 
